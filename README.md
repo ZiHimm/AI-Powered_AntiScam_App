@@ -26,7 +26,7 @@ We don't ask *"is this video fake?"* (a race deepfakes keep winning). We ask *"d
 **Platform support:** Android (8 or newer for the app, 11 or newer for automatic screen scanning). iOS doesn't let
 apps see other apps' screens, so iPhone users get guardian alerts and a manual "verify this caller" flow only.
 
-**Status:** the Android app is in development in [`android/`](android/). The web demo below is the interactive concept
+**Status:** the Android app is in development in [`android/`](android/). Download the latest build: **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)**. The web demo below is the interactive concept
 demo: it runs the same verification logic in a browser, with three simulated phones.
 
 ---

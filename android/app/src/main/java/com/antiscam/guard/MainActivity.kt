@@ -43,6 +43,17 @@ class MainActivity : AppCompatActivity() {
         val p = pending; pending = null
         if (uri != null && p != null) handlePhoto(uri, p)
     }
+    private val selfies = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val n = r.data?.getIntExtra(EnrolActivity.EXTRA_ADDED, 0) ?: 0
+        if (n > 0) toast("Added $n face sample(s)")
+        renderPeople()
+    }
+
+    private fun takeSelfies(name: String, isOwner: Boolean) = selfies.launch(
+        Intent(this, EnrolActivity::class.java)
+            .putExtra(EnrolActivity.EXTRA_NAME, name)
+            .putExtra(EnrolActivity.EXTRA_OWNER, isOwner))
+
     private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,6 +70,11 @@ class MainActivity : AppCompatActivity() {
         }
         find<Button>(R.id.btn_add_person).setOnClickListener { askForPerson() }
         find<Button>(R.id.btn_test).setOnClickListener { pick(Pick.Test) }
+        find<Button>(R.id.btn_preview).setOnClickListener {
+            val svc = CallWatcherService.running
+            if (svc == null) toast("Turn on the call watcher first")
+            else svc.previewWarning(FaceStore.load(this).firstOrNull { !it.isOwner }?.name ?: "Son")
+        }
 
         val bar = find<SeekBar>(R.id.threshold)
         bar.progress = ((FaceStore.threshold(this) - 0.6f) * 100).toInt().coerceIn(0, 80)
@@ -153,7 +169,10 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
             row.addView(Button(this).apply {
-                text = "+ Photo"; setOnClickListener { pick(Pick.Enrol(p.name, p.isOwner)) }
+                text = "📷"; setOnClickListener { takeSelfies(p.name, p.isOwner) }
+            })
+            row.addView(Button(this).apply {
+                text = "🖼"; setOnClickListener { pick(Pick.Enrol(p.name, p.isOwner)) }
             })
             row.addView(Button(this).apply {
                 text = "✕"; setOnClickListener {
@@ -178,7 +197,11 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Add person")
             .setView(form)
-            .setPositiveButton("Choose photo") { _, _ ->
+            .setPositiveButton("📷 Take selfies") { _, _ ->
+                val n = name.text.toString().trim()
+                if (n.isEmpty()) toast("Enter a name first") else takeSelfies(n, owner.isChecked)
+            }
+            .setNeutralButton("Choose photo") { _, _ ->
                 val n = name.text.toString().trim()
                 if (n.isEmpty()) toast("Enter a name first") else pick(Pick.Enrol(n, owner.isChecked))
             }

@@ -3,6 +3,9 @@
 Runs in the background. When a **WhatsApp, Instagram, Messenger or Telegram** video call is on screen, it looks at
 the caller's face (on the phone, never uploaded) and compares it with your family's enrolled faces.
 
+Warnings are drawn **on top of the video call** (big text, **HANG UP** / **Dismiss** buttons), plus a notification.
+**HANG UP** presses the call app's own end-call button when it can find it.
+
 | Situation | What the phone shows |
 | --- | --- |
 | Face looks like a family member | 📞 *"This video call looks like Son. A face can be faked. If they ask for money, call Son back first."* |
@@ -15,16 +18,19 @@ guardians (Firebase + signed alerts, as in the web demo).
 
 ## Install on a phone (no Play Store)
 
-1. Build it (below) or take `app-debug.apk` from a teammate, and copy it to the phone (USB, Google Drive, Telegram…).
+1. On the phone, download **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)**
+   (GitHub builds it automatically after every push; see *Releases → Android app (latest build)*).
 2. Open the APK on the phone and allow **Install unknown apps** for the app you opened it from.
 3. Open **AntiScam Guard**:
    - Tap **Allow notifications**.
    - Tap **Turn on call watcher**, then **Installed apps / Downloaded apps → AntiScam Guard**, and switch it on.
      If the switch is greyed out (Android 13+ blocks this for sideloaded apps): **Settings → Apps → AntiScam Guard →
      ⋮ (top right) → Allow restricted settings**, then try again.
-4. **Add person** for each family member with 2–3 clear photos. Add **yourself** too with *This is me* ticked, so your
+4. **Add person** for each family member, then **📷 Take selfies**: they look at the front camera and 3 face
+   samples are saved automatically (or **Choose photo** to use gallery photos). Add **yourself** too with *This is me* ticked, so your
    own camera preview during a call is ignored. Use the name exactly as it appears in your contacts (e.g. "Son").
-5. Use **Check a photo** to test matching before a real call. Tune **Match strictness** if needed.
+5. Use **Check a photo** to test matching, and **Preview the warning** to see the on-call warning without a call.
+   Tune **Match strictness** if needed.
 
 Then make a WhatsApp video call from a family member's phone and watch the notifications and the app's Activity log.
 
@@ -32,6 +38,9 @@ Then make a WhatsApp video call from a family member's phone and watch the notif
 On Xiaomi/Oppo/Vivo/Huawei phones, also turn off battery optimisation for the app, or the system may stop the service.
 
 ## Build
+
+Every push to `main` that touches `android/` is built by GitHub Actions (`.github/workflows/android.yml`) and published
+as the `android-latest` release. All builds share `app/debug.keystore`, so any build installs over any other.
 
 Open the `android/` folder in Android Studio and press ▶ with a phone connected, or from a terminal:
 
@@ -60,6 +69,8 @@ CallWatcherService (AccessibilityService)
 | `FaceStore.kt` | Enrolled people, embeddings and threshold in private app storage |
 | `MainActivity.kt` | Setup screen: permissions, enrol faces, test a photo, live log |
 | `Notifier.kt` | Alert and status notifications |
+| `WarningOverlay.kt` | Big warning drawn over the call (accessibility overlay, no extra permission) |
+| `EnrolActivity.kt` | Front-camera enrolment: 3 face samples, no photos saved |
 | `assets/mobilefacenet.tflite` | Face embedding model (MobileFaceNet, 112×112 → 192-d), from [MCarlomagno/FaceRecognitionAuth](https://github.com/MCarlomagno/FaceRecognitionAuth) |
 
 ### Known limits

@@ -16,6 +16,16 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") } // real phones; keeps the APK small
     }
 
+    // Shared debug key (committed on purpose, not a secret) so APKs from any laptop or from
+    // GitHub Actions can install over each other. A Play Store release would use a private key.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -37,4 +47,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    val camerax = "1.4.1"
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-view:$camerax")
 }

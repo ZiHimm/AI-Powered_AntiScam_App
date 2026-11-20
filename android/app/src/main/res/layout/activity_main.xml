@@ -42,7 +42,7 @@
         <TextView style="@style/Section" android:text="2 · Family faces" />
         <TextView
             style="@style/Body"
-            android:text="Add 2–3 clear photos per person. Add yourself too (tick “This is me”) so your own camera preview is ignored. Only face embeddings are kept, never the photos." />
+            android:text="Tap 📷 to take 3 quick selfies of each person (or 🖼 to pick photos). Add yourself too (tick “This is me”) so your own camera preview is ignored. Only face embeddings are kept, never the photos." />
 
         <LinearLayout
             android:id="@+id/people"
@@ -55,6 +55,7 @@
         <!-- 3. Test -->
         <TextView style="@style/Section" android:text="3 · Test without a call" />
         <Button android:id="@+id/btn_test" style="@style/Btn" android:text="Check a photo" />
+        <Button android:id="@+id/btn_preview" style="@style/Btn" android:text="Preview the warning" />
         <TextView android:id="@+id/test_result" style="@style/Body" />
 
         <TextView android:id="@+id/threshold_label" style="@style/Body" />
