@@ -99,13 +99,9 @@ class FaceEngine private constructor(ctx: Context) {
         return normalise(out[0])
     }
 
-    private fun squareInside(b: Rect, w: Int, h: Int): Rect? {
-        val side = min(max(b.width(), b.height()), min(w, h))
-        if (side < 24) return null
-        val cx = b.centerX().coerceIn(side / 2, w - side / 2)
-        val cy = b.centerY().coerceIn(side / 2, h - side / 2)
-        return Rect(cx - side / 2, cy - side / 2, cx - side / 2 + side, cy - side / 2 + side)
-    }
+    /** Square crop around the face, always fully inside the w×h bitmap (faces at the edge used to overflow by 1 px). */
+    internal fun squareInside(b: Rect, w: Int, h: Int): Rect? =
+        cropSquare(b.centerX(), b.centerY(), b.width(), b.height(), w, h)?.let { (l, t, side) -> Rect(l, t, l + side, t + side) }
 
     private fun normalise(v: FloatArray): FloatArray {
         var sum = 0f
@@ -113,4 +109,16 @@ class FaceEngine private constructor(ctx: Context) {
         val n = sqrt(sum).coerceAtLeast(1e-6f)
         return FloatArray(v.size) { v[it] / n }
     }
+}
+
+/**
+ * Pure helper (unit-tested): square of side min(max(faceW, faceH), min(w, h)) centred on the face and clamped so it is
+ * always fully inside the w×h bitmap. Returns (left, top, side), or null if the face is too small to judge.
+ */
+internal fun cropSquare(cx: Int, cy: Int, faceW: Int, faceH: Int, w: Int, h: Int): Triple<Int, Int, Int>? {
+    val side = min(max(faceW, faceH), min(w, h))
+    if (side < 24) return null
+    val left = (cx - side / 2).coerceIn(0, w - side)
+    val top = (cy - side / 2).coerceIn(0, h - side)
+    return Triple(left, top, side)
 }

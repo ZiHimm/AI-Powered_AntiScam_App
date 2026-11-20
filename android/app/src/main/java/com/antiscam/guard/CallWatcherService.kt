@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -50,6 +51,7 @@ class CallWatcherService : AccessibilityService() {
     private val overlaysShown = mutableSetOf<String>() // each warning appears at most once per call
     private var namesOnScreen: List<String> = emptyList()
     private var people: List<Person> = emptyList()
+    private var lastShotErrorLog = 0L
 
     override fun onServiceConnected() {
         audio = getSystemService(AudioManager::class.java)
@@ -260,7 +262,15 @@ class CallWatcherService : AccessibilityService() {
             }
 
             override fun onFailure(errorCode: Int) {
-                main.post { busy = false } // usually "too soon since last screenshot"; just retry next tick
+                main.post {
+                    busy = false
+                    // 3 = "too soon since the last screenshot": normal, just retry next tick. Others explain a stall.
+                    if (errorCode != 3 && SystemClock.elapsedRealtime() - lastShotErrorLog > 10_000) {
+                        lastShotErrorLog = SystemClock.elapsedRealtime()
+                        LiveLog.add("Screenshot failed (code $errorCode: ${mapOf(1 to "internal error", 2 to "no access",
+                            4 to "invalid display", 5 to "invalid window")[errorCode] ?: "unknown"}). Faces can't be checked right now.")
+                    }
+                }
             }
         })
     }
@@ -296,15 +306,22 @@ class CallWatcherService : AccessibilityService() {
         while (votes.size > VOTES) votes.removeFirst()
         val (top, count) = votes.groupingBy { it }.eachCount().maxByOrNull { it.value } ?: return
         if (count < AGREE) return
+        // "Not family" needs every recent frame to agree: in testing it flashed one second before the same call
+        // matched Daughter, contradicting itself on screen.
+        if (top == "?stranger" && count < VOTES) return
 
         val claimed = namesOnScreen.firstOrNull()
         val decision = "$top|$claimed"
         if (decision == lastDecision) return
         lastDecision = decision
 
-        // Once the real family member has been asked, their answer decides; ignore later frames
-        // (the warning card itself can hide the face in screenshots).
-        if (family.handling) return
+        // Once the real family member has been asked, their answer decides and later frames are ignored
+        // (the warning card itself can hide the face in screenshots), EXCEPT a different family member's face:
+        // a scammer may start with an innocent face and then switch to a deepfake of Son. Check that person too.
+        if (family.handling) {
+            FamilyLink.roleForName(top)?.let { family.faceChanged(it, "seen in $count of the last ${votes.size} frames") }
+            return
+        }
 
         when {
             top == "?blocked" -> {

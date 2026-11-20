@@ -28,6 +28,7 @@ class FamilyCheck(
         var target: String? = null
         var nonce: String? = null
         var expiredNonce: String? = null  // the request that timed out: a late signed "No" still counts
+        val asked = mutableSetOf<String>() // roles already asked during this call (each at most once)
         var expires = 0L
         val notified = linkedSetOf<String>()
     }
@@ -57,6 +58,7 @@ class FamilyCheck(
         if (c.status != "scanning") return
         val who = FamilyLink.nameOf(role)
         c.target = role
+        c.asked += role
         FamilyLink.log("face", "${c.app} call: face matches $who ($how). A deepfake would match too, so now we ask the real $who.")
 
         if (!FamilyLink.isOnline(role)) {
@@ -94,6 +96,24 @@ class FamilyCheck(
         main.postDelayed({
             if (call === c && c.status == "verifying") { overlay.updateBody(countdownText(c, who)); tickCountdown(c, who) }
         }, 1000)
+    }
+
+    /**
+     * After the first check, a DIFFERENT family member's face appeared clearly (e.g. a scammer starts with an
+     * innocent face, then switches to a deepfake of Son). Ask that person too. Each person at most once per call;
+     * a call already judged a scam stays a scam.
+     */
+    fun faceChanged(role: String, how: String) {
+        val c = call ?: return
+        if (c.status == "scanning" || role == c.target || role in c.asked) return
+        if (c.status in setOf("B", "warned", "secret-fail")) return
+        val before = FamilyLink.nameOf(c.target ?: "")
+        FamilyLink.log("face", "The face changed: it was $before, now it looks like ${FamilyLink.nameOf(role)}. Checking again.")
+        main.removeCallbacksAndMessages(null)
+        if (c.status == "verifying") c.nonce?.let { n -> c.target?.let { FamilyLink.sendTo(it, JSONObject().put("kind", "cancel-ping").put("nonce", n)) } }
+        c.nonce = null; c.expiredNonce = null
+        c.status = "scanning"
+        verify(role, how)
     }
 
     // ---------------------------------------------------------------- step 2: the answer
