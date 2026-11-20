@@ -12,14 +12,32 @@ const ROOM_BASE = location.pathname.replace(/\/[^/]*$/, '');
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${ROOM_BASE}/ws`;
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('token') || '';
 
+// Phones send log lines as HTML. Any device that knows the room code can send one, so never run it:
+// only these tags survive, with no attributes; everything else becomes plain text.
+const SAFE = new Set(['B', 'I', 'CODE', 'BR', 'SMALL']);
+function safeHtml(html) {
+  const src = new DOMParser().parseFromString(`<div>${String(html ?? '')}</div>`, 'text/html').body.firstChild;
+  const out = document.createElement('div');
+  (function copy(from, to) {
+    for (const n of from.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) to.appendChild(document.createTextNode(n.textContent));
+      else if (n.nodeType === Node.ELEMENT_NODE) {
+        if (SAFE.has(n.tagName)) copy(n, to.appendChild(document.createElement(n.tagName)));
+        else copy(n, to);   // unknown tag: keep its text, drop the tag
+      }
+    }
+  })(src, out);
+  return out.innerHTML;
+}
+
 function line(who, tag, html) {
   const li = document.createElement('li');
   if (tag === 'sep') {
     li.className = 'sep';
-    li.innerHTML = `── ${html} ──`;
+    li.innerHTML = `── ${safeHtml(html)} ──`;
   } else {
-    li.innerHTML = `<time>${new Date().toLocaleTimeString()}</time><span class="who who-${who}">${esc(NAMES[who] || who)}</span>`
-      + `<span class="tag tag-${esc(tag)}">${esc(tag)}</span><span class="msg">${html}</span>`;
+    li.innerHTML = `<time>${new Date().toLocaleTimeString()}</time><span class="who who-${esc(who)}">${esc(NAMES[who] || who)}</span>`
+      + `<span class="tag tag-${esc(tag)}">${esc(tag)}</span><span class="msg">${safeHtml(html)}</span>`;
   }
   const ol = $('#log');
   ol.prepend(li);
@@ -29,7 +47,7 @@ function line(who, tag, html) {
 function renderDevs() {
   $('#devs').innerHTML = ['mum', 'son', 'daughter'].map((r) => {
     const p = peers[r] || {};
-    return `<div class="dev ${p.online ? 'on' : 'off'}"><span>${NAMES[r]}<small>${p.pub ? `key ${p.pub.x.slice(0, 10)}…` : 'not paired'}</small></span>`
+    return `<div class="dev ${p.online ? 'on' : 'off'}"><span>${NAMES[r]}<small>${p.pub ? `key ${esc(String(p.pub.x).slice(0, 10))}…` : 'not paired'}</small></span>`
       + `<span class="st">● ${p.online ? 'online' : 'offline'}</span></div>`;
   }).join('');
 }

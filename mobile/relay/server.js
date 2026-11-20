@@ -67,8 +67,9 @@ function parsePath(p) {
     if (p.startsWith('/f/') || p === '/f') return null;
     return { room: DEFAULT_ROOM ? 'default' : null, rest: p, base: '' };   // static files still served
   }
-  const code = m[1].toUpperCase();
-  if (code.replace(/-/g, '').length < 8) return null;   // too short to be unguessable
+  // hyphens are only for readability: K7Q2-9XPD and k7q29xpd are the same room (a typo can't split a family)
+  const code = m[1].toUpperCase().replace(/-/g, '');
+  if (code.length < 8) return null;   // too short to be unguessable
   return { room: code, rest: m[2] || '', base: `/f/${m[1]}` };
 }
 const mask = (room) => (room === 'default' ? 'default room' : `room ${room.slice(0, 4)}…`);

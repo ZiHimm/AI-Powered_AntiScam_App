@@ -34,23 +34,31 @@ work from anywhere, even on mobile data.
    - Refusals close with a clear code: 4029 rate limited, 4008 room full, 4013 relay full.
 4. **Crash fix.** One oversized message used to crash the whole relay. Now it only drops that one connection.
    (The original relay has the same gap.)
-5. **Health check.** Opening `/healthz` shows whether the relay is up, so you can check before going on stage.
-6. **Laptop mode unchanged.** `cd mobile && npm run relay` works exactly as before, so it's still the backup plan.
+5. **Monitor can't be hijacked.** Phone log lines are shown with only simple formatting (`<b>`, `<code>`…); any
+   other HTML, scripts or attributes become plain text, and phone keys are escaped. Before, any device that knew the
+   room code could run code in the presenter's monitor and read the `#token=` secret.
+6. **Typos can't split a family.** Hyphens and case in the family code are ignored: `K7Q2-9XPD` and `k7q29xpd` are
+   the same room.
+7. **Health check.** Opening `/healthz` shows whether the relay is up, so you can check before going on stage.
+8. **Laptop mode unchanged.** `cd mobile && npm run relay` works exactly as before, so it's still the backup plan.
    Plain `/ws` (one shared room) stays on for the laptop but is switched off on internet hosts.
 
 ## What's not touched
 
 - Jason's app (`android/`): no changes.
-- Brian's phone app: only `monitor.js`, as the brief allowed.
+- Brian's phone app: only `monitor.js`, as the brief allowed (room path, `wss://`, token, read-only state, and the
+  safe-HTML fix for log lines).
 - The web demo and `main`: no changes. It will go through a pull request.
 
 ## Status
 
 - ✅ Built and tested on the laptop:
-  - `node relay/check.js` (19 checks) passes in laptop mode, on a simulated internet host and in the Docker image;
+  - `node relay/check.js` (20 checks) passes in laptop mode, on a simulated internet host and in the Docker image;
   - 160 back-to-back reconnects from one IP are all accepted (no self-inflicted lockout);
   - the full "Son says No" flow works inside a family room (Mum: SCAM, Daughter: signed urgent alert);
   - a monitor without the token can't send anything;
+  - a fake phone sending `<img onerror>`, `<script>` and a booby-trapped key can't run anything in the monitor;
+  - phones that type the family code three different ways (hyphens, lower case) end up in the same room;
   - a flood of 300 messages from one phone is cut to 60, other phones on the same IP unaffected.
 - ❌ Not deployed to the internet yet. That needs a Fly.io (or Railway) account.
 - ❌ Not yet tested on real phones over mobile data.

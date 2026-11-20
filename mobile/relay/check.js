@@ -97,6 +97,13 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
   ok(extra.closeCode === 4008 && extra.closeReason === 'room full', `13th connection to a room is closed with 4008 "room full" (got ${extra.closeCode})`);
   crowd.forEach((w) => w.close());
 
+  const tail = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const typed1 = await phone(`ABCD-${tail}-WXYZ`, 'mum');
+  const typed2 = await phone(`abcd${tail.toLowerCase()}wxyz`, 'son');
+  await sleep(200);
+  ok(lastPeers(typed1)?.son.online, 'hyphens and case are ignored: ABCD-…-WXYZ and abcd…wxyz are the same room');
+  typed1.close(); typed2.close();
+
   const short = await open('/f/SHORT/ws');
   ok(short.status === 404, 'too-short family code is refused');
   ok((await fetch(`${BASE}/f/${A}/monitor.html`)).status === 200, 'monitor page is served inside the room');
