@@ -77,7 +77,9 @@ class FamilyCheck(
             .put("type", "verify-request").put("callId", c.id).put("to", role).put("nonce", nonce)
             .put("prompt", "Are you calling Mum right now?").put("ts", now).put("expires", c.expires)
             .put("elder", FamilyLink.elderMode)
-        FamilyLink.sendTo(role, JSONObject().put("kind", "ping").put("req", req))
+        // Signed, so a stranger on the relay can't send Son a fake "Are you calling Mum?". `req` stays for apps that
+        // don't check signatures yet (Family Verify); they ignore the extra `env`.
+        FamilyLink.sendTo(role, JSONObject().put("kind", "ping").put("req", req).put("env", DeviceKey.sign(req)))
         c.status = "verifying"
         LiveLog.callVerdict("looks like $who, asking $who…")
         FamilyLink.log("push", "Mum → $who's phone: \"Are you calling Mum right now?\" nonce ${nonce.take(8)}…, ${FamilyLink.replySeconds}s. No video, audio or location.")

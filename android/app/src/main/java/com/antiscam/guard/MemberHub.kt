@@ -26,7 +26,8 @@ object MemberHub : FamilyLink.Listener {
         var pingState = PingState.OPEN
         var answer: String? = null
         var late = false
-        var closedByMum = false   // Mum expired/cancelled it (even while we were confirming); clocks can differ
+        var closedByMum = false
+        var unsigned = false      // question came without Mum's signature (older Mum app): shown, but marked   // Mum expired/cancelled it (even while we were confirming); clocks can differ
         var title = ""
         var body = ""
         val shared = mutableListOf<String>()
@@ -51,7 +52,7 @@ object MemberHub : FamilyLink.Listener {
 
     override fun onFamilyMessage(from: String, body: JSONObject) {
         when (body.optString("kind")) {
-            "ping" -> body.optJSONObject("req")?.let { onPing(it) }
+            "ping" -> onPingMessage(body)
             "expire-ping" -> closePing(body.optString("nonce"), PingState.EXPIRED)
             "cancel-ping" -> closePing(body.optString("nonce"), PingState.CANCELLED)
             "alert" -> body.optJSONObject("env")?.let { onAlert(it) }
@@ -62,8 +63,29 @@ object MemberHub : FamilyLink.Listener {
     }
 
     // ---------------------------------------------------------------- "Are you calling Mum?"
-    private fun onPing(req: JSONObject) {
-        val card = Card(Kind.PING, req = req)
+    /**
+     * Signed question (AntiScam Guard as Mum): the signature must come from Mum's pinned key, and the signed body
+     * is what's used. Unsigned (Family Verify as Mum, older protocol): still shown, marked "not verified".
+     */
+    private fun onPingMessage(body: JSONObject) {
+        val env = body.optJSONObject("env")
+        if (env != null) {
+            if (!FamilyLink.verifyFrom(env, "mum")) {
+                block("🛑 Fake question blocked", "Someone asked \"Are you calling Mum?\" but it was NOT signed by Mum's phone. Ignore it.")
+                FamilyLink.log("sec", "$myName's phone: ✗ question NOT signed by Mum's phone. Blocked.")
+                return
+            }
+            val req = try { JSONObject(env.getString("body")) } catch (_: Throwable) { return }
+            if (cards.any { it.kind == Kind.PING && it.nonce == req.optString("nonce") }) return // same question twice
+            FamilyLink.log("sec", "$myName's phone: ✓ question signed by Mum's phone")
+            onPing(req, unsigned = false)
+        } else {
+            body.optJSONObject("req")?.let { onPing(it, unsigned = true) }
+        }
+    }
+
+    private fun onPing(req: JSONObject, unsigned: Boolean) {
+        val card = Card(Kind.PING, req = req).also { it.unsigned = unsigned }
         cards.add(0, card)
         val expires = req.optLong("expires")
         if (expires > 0 && System.currentTimeMillis() > expires + 2000) {

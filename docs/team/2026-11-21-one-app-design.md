@@ -25,6 +25,14 @@ The native app (`android/`, AntiScam Guard) asks **"Whose phone is this?"** on f
   Forget-keys button.
 - Family Verify stays as the browser/test client and backup, and the monitor + scammer console are unchanged.
 
+## Done early: the "Are you calling Mum?" question is now signed (works with both apps)
+AntiScam Guard as Mum sends `{kind:"ping", req, env}`: `env` = `req` signed with Mum's key (same `{body, sig}` format as alerts).
+- **AntiScam Guard family mode:** verifies `env` against Mum's pinned key and uses the signed body; a bad signature →
+  "🛑 Fake question blocked"; no `env` (Family Verify as Mum) → shown with "⚠️ Not signed".
+- **Family Verify (Brian):** works unchanged (ignores `env`). To do: when `env` is present, verify it with
+  `verifyFrom(env, 'mum')` and use `JSON.parse(env.body)`; block on failure. Once both Mum apps sign, both member apps can
+  reject unsigned questions.
+
 ## Step 2: everyone protected (protocol v2, needs agreement)
 
 ### Members instead of fixed roles

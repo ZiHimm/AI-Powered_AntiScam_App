@@ -38,6 +38,7 @@ class FamilyActivity : AppCompatActivity() {
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
     private lateinit var settings: LinearLayout
+    private lateinit var fixButton: TextView
     private var shown = -1L
     private val dp get() = resources.displayMetrics.density
     private val hhmmss = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -77,6 +78,8 @@ class FamilyActivity : AppCompatActivity() {
         root.addView(text("AntiScam Guard · family mode", 15f, 0xFF8B949E.toInt()))
         status = text("", 17f, 0xFFE6EDF3.toInt(), top = 12)
         root.addView(status)
+        fixButton = bigButton("", 0xFFF59E0B.toInt()) {}.apply { visibility = View.GONE }
+        root.addView(fixButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, px(12), 0, 0) }
         root.addView(list)
 
@@ -128,6 +131,20 @@ class FamilyActivity : AppCompatActivity() {
             mumOnline -> "🟢 Connected · Mum's phone is online" + if (MemberHub.guardian) " · you're one of her guardians" else ""
             else -> "🟡 Connected · Mum's phone is offline"
         }
+        // the one thing that would stop questions/alerts from reaching this phone, with a one-tap fix
+        val notifOk = Notifier.canPost(this)
+        val batteryOk = getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: true
+        when {
+            !notifOk -> fix("⚠️ Allow notifications, or Mum's questions can't pop up") {
+                if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                else startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+            }
+            !batteryOk -> fix("⚠️ Keep alerts on: don't let battery saver stop them") {
+                try { startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:$packageName"))) }
+                catch (_: Throwable) { startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            }
+            else -> fixButton.visibility = View.GONE
+        }
         list.removeAllViews()
         if (MemberHub.cards.isEmpty()) list.addView(text("Nothing yet. If someone who looks like you video-calls Mum, you'll be asked here.", 16f, 0xFF8B949E.toInt(), top = 8))
         for (c in MemberHub.cards.take(20)) list.addView(cardView(c))
@@ -158,6 +175,8 @@ class FamilyActivity : AppCompatActivity() {
                             bigButton("No, not me", 0xFFDC2626.toInt()) { confirmThen(c, "no") }))
                         else box.addView(text("🔒 Confirming…", 16f, muted, top = 8))
                         box.addView(text("🔒 Fingerprint required · request ${req.optString("nonce").take(8)}…", 13f, muted, top = 8))
+                        box.addView(text(if (c.unsigned) "⚠️ Not signed (older Mum app). Only answer if Mum really is on a call."
+                                         else "✔ Signed by Mum's phone", 13f, if (c.unsigned) 0xFFFBBF24.toInt() else 0xFF86EFAC.toInt(), top = 4))
                     }
                     MemberHub.PingState.ANSWERED -> box.addView(text(c.body, 17f, white, top = 6))
                     MemberHub.PingState.EXPIRED -> box.addView(text("Expired. Mum was told you didn't reply.", 17f, muted, top = 6))
@@ -183,6 +202,10 @@ class FamilyActivity : AppCompatActivity() {
             }
         }
         return LinearLayout(this).apply { setPadding(0, px(6), 0, px(6)); addView(box, LinearLayout.LayoutParams(-1, -2)) }
+    }
+
+    private fun fix(label: String, action: () -> Unit) {
+        fixButton.text = label; fixButton.visibility = View.VISIBLE; fixButton.setOnClickListener { action() }
     }
 
     // ------------------------------------------------------------------ fingerprint before Yes/No
