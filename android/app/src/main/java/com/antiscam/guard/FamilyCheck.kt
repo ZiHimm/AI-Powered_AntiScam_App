@@ -36,6 +36,9 @@ class FamilyCheck(
     private val main = Handler(Looper.getMainLooper())
     private var call: Call? = null
 
+    /** Who was asked for this call (role), if anyone. */
+    val targetRole: String? get() = call?.target
+
     /** True once a family check has been started for the current call (so local-only warnings step aside). */
     val handling get() = call?.status?.let { it != "scanning" } == true
 

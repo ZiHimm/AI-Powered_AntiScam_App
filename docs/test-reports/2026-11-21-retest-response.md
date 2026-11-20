@@ -27,3 +27,17 @@ only appeared after Son had already said No (SCAM stays SCAM).
    to **Son** → Son taps No → SCAM.
 2. **Edge:** start a call with the face half off the screen (chin/cheek cut off). Expect no `Frame error` lines.
 3. Look for any `Screenshot failed (code …)` lines and paste them if you see one.
+
+## Update: "joined" vs "swapped" (after your face-swap observation)
+Observed: Son on camera, then **Daughter stepped into the frame next to him** → Daughter was asked. That was the new
+face-switch rule being too eager (it looked only at the biggest face, and would also cancel Son's pending question).
+Now every face in the frame is tracked, and a new check only happens if the person already asked has **not been seen at all
+(even as a weak match) in the last 3 frames**, i.e. a real swap. If they're still there, it's logged once as
+`Daughter joined Son on the call. Not asking again.` and nothing else happens. Unit-tested
+(`FaceSwapTest`: join, briefly-hidden, swap, same person, nobody asked yet).
+
+Please test both:
+- **Join:** Son on camera → Son asked → Daughter steps in next to him → expect the "joined" line, **no** ping to Daughter, and
+  Son's question still open.
+- **Swap:** Daughter on camera → Daughter asked → Daughter leaves the frame completely and Son's photo/video is shown →
+  expect `The face changed … now it looks like Son` and a ping to Son.

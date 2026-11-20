@@ -52,6 +52,12 @@ class CallWatcherService : AccessibilityService() {
     private var namesOnScreen: List<String> = emptyList()
     private var people: List<Person> = emptyList()
     private var lastShotErrorLog = 0L
+    /** Family roles seen anywhere in each of the last few frames (even weak matches), to tell "joined" from "switched". */
+    private val recentFamily = ArrayDeque<Set<String>>()
+    private var joinLogged = mutableSetOf<String>()
+
+    /** One screenshot's result: the main (biggest non-owner) face's label, plus every family role visible in it. */
+    private class FrameResult(val label: String, val familyRoles: Set<String> = emptySet())
 
     override fun onServiceConnected() {
         audio = getSystemService(AudioManager::class.java)
@@ -114,7 +120,7 @@ class CallWatcherService : AccessibilityService() {
     private fun startCall(app: String) {
         activeApp = app
         people = FaceStore.load(this)
-        votes.clear(); lastDecision = null; overlaysShown.clear()
+        votes.clear(); lastDecision = null; overlaysShown.clear(); recentFamily.clear(); joinLogged.clear()
         LiveLog.add("📞 $app call detected. Checking the caller's face…")
         Notifier.status(this, "$app call: looking at the caller's face on this phone")
         if (people.none { !it.isOwner }) LiveLog.add("No family faces enrolled yet. Add some in the app.")
@@ -124,7 +130,7 @@ class CallWatcherService : AccessibilityService() {
     private fun endCall() {
         LiveLog.add("Call ended (${activeApp}).")
         activeApp = null
-        votes.clear(); lastDecision = null; overlaysShown.clear()
+        votes.clear(); lastDecision = null; overlaysShown.clear(); recentFamily.clear(); joinLogged.clear()
         Notifier.clearStatus(this)
         overlay.hide()
         family.end()
@@ -254,9 +260,9 @@ class CallWatcherService : AccessibilityService() {
                     val bmp = hw?.copy(Bitmap.Config.ARGB_8888, false)
                     hw?.recycle()
                     result.hardwareBuffer.close()
-                    if (bmp == null) "?noface" else classify(bmp).also { bmp.recycle() }
+                    if (bmp == null) FrameResult("?noface") else classify(bmp).also { bmp.recycle() }
                 } catch (t: Throwable) {
-                    LiveLog.add("Frame error: ${t.message}"); "?noface"
+                    LiveLog.add("Frame error: ${t.message}"); FrameResult("?noface")
                 }
                 main.post { busy = false; onFrame(label) }
             }
@@ -276,9 +282,11 @@ class CallWatcherService : AccessibilityService() {
     }
 
     /** Runs on the engine thread. Returns a person's name or a "?..." label. */
-    private fun classify(bmp: Bitmap): String {
-        if (looksBlack(bmp)) return "?blocked"
+    private fun classify(bmp: Bitmap): FrameResult {
+        if (looksBlack(bmp)) return FrameResult("?blocked")
         val threshold = FaceStore.threshold(this)
+        var main: String? = null
+        val present = mutableSetOf<String>()
         for (face in engine.findFaces(bmp)) {
             if (face.areaFraction < 0.01f) continue // too tiny to judge
             val ranked = FaceStore.ranked(people, face.embedding)
@@ -286,6 +294,8 @@ class CallWatcherService : AccessibilityService() {
             val next = ranked.getOrNull(1)
             val matched = best != null && best.distance <= threshold
             if (matched && best!!.person!!.isOwner) continue // our own camera preview, look at the next face
+            if (matched) FamilyLink.roleForName(best!!.person!!.name)?.let { present += it }
+            if (main != null) continue // the biggest face decides; smaller ones only count as "present"
             // A clear match: well inside the limit AND clearly closer than the next person
             val confident = matched && best!!.distance <= threshold - FaceStore.CONFIDENT_GAP &&
                 (next == null || next.distance - best.distance >= FaceStore.MARGIN)
@@ -295,13 +305,16 @@ class CallWatcherService : AccessibilityService() {
                 matched -> "Face maybe ${best!!.person!!.name} (distance %.2f), not sure$nextTxt".format(best.distance)
                 else -> "Face not in family (closest ${best?.person?.name ?: "-"} %.2f)$nextTxt".format(best?.distance ?: Float.NaN)
             })
-            return when { confident -> best!!.person!!.name; matched -> "?unsure"; else -> "?stranger" }
+            main = when { confident -> best!!.person!!.name; matched -> "?unsure"; else -> "?stranger" }
         }
-        return "?noface"
+        return FrameResult(main ?: "?noface", present)
     }
 
-    private fun onFrame(label: String) {
+    private fun onFrame(frame: FrameResult) {
         val app = activeApp ?: return
+        val label = frame.label
+        recentFamily.addLast(frame.familyRoles)
+        while (recentFamily.size > VOTES) recentFamily.removeFirst()
         votes.addLast(label)
         while (votes.size > VOTES) votes.removeFirst()
         val (top, count) = votes.groupingBy { it }.eachCount().maxByOrNull { it.value } ?: return
@@ -319,7 +332,14 @@ class CallWatcherService : AccessibilityService() {
         // (the warning card itself can hide the face in screenshots), EXCEPT a different family member's face:
         // a scammer may start with an innocent face and then switch to a deepfake of Son. Check that person too.
         if (family.handling) {
-            FamilyLink.roleForName(top)?.let { family.faceChanged(it, "seen in $count of the last ${votes.size} frames") }
+            val role = FamilyLink.roleForName(top) ?: return
+            val asked = family.targetRole
+            if (!isFaceSwap(asked, role, recentFamily)) {
+                // the person already asked is still on screen: someone JOINED the call, it wasn't a face swap
+                if (joinLogged.add(role)) LiveLog.add("${FamilyLink.nameOf(role)} joined ${FamilyLink.nameOf(asked ?: "")} on the call. Not asking again.")
+                return
+            }
+            family.faceChanged(role, "seen in $count of the last ${votes.size} frames; ${FamilyLink.nameOf(asked ?: "")} no longer on screen")
             return
         }
 
@@ -398,3 +418,11 @@ class CallWatcherService : AccessibilityService() {
         return bright < px.size / 50
     }
 }
+
+/**
+ * After someone was asked, a different family member's face became the main face. Is it a face SWAP (ask again) or did
+ * they JOIN (both on screen; don't)? Swap only if the person already asked hasn't been seen, even as a weak match, in any
+ * recent frame. Pure function, unit-tested.
+ */
+internal fun isFaceSwap(asked: String?, newRole: String, recentFamily: Collection<Set<String>>): Boolean =
+    asked != null && newRole != asked && recentFamily.none { asked in it }
