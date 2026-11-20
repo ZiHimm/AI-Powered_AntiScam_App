@@ -22,10 +22,12 @@ function open(path, hello) {
     ws.on('message', (d) => ws.inbox.push(JSON.parse(d)));
     ws.on('open', () => { if (hello) ws.send(JSON.stringify(hello)); setTimeout(() => resolve(ws), 150); });
     ws.on('unexpected-response', (_req, res) => { ws.status = res.statusCode; resolve(ws); });
-    ws.on('close', (c, r) => { ws.closeCode = c; ws.closeReason = String(r); });
+    ws.closed = new Promise((done) => ws.on('close', (c, r) => { ws.closeCode = c; ws.closeReason = String(r); done(); }));
     ws.on('error', () => {});
   });
 }
+// wait for the close event, not a fixed time: behind Fly's proxy it fires ~5 s after the close code is sent
+const closed = (ws, ms = 10000) => Promise.race([ws.closed, sleep(ms)]);
 const pub = { kty: 'EC', crv: 'P-256', x: 'test', y: 'test' };
 const phone = (room, role) => open(`/f/${room}/ws`, { t: 'hello', role, pub, name: role });
 const lastPeers = (ws) => [...ws.inbox].reverse().find((m) => m.t === 'peers')?.peers;
@@ -74,7 +76,7 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
 
   const son2 = await phone(A, 'son');
   const mumB = await phone(B, 'mum');
-  await sleep(300);
+  await closed(son);
   ok(son.closeCode === 4000, 'a second "son" replaces the first (close code 4000)');
   ok(mum.readyState === WebSocket.OPEN && mumB.readyState === WebSocket.OPEN, "a Mum in room B does not replace the Mum in room A");
 
@@ -93,7 +95,7 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
   const C = code(), crowd = [];
   for (let i = 0; i < 12; i++) crowd.push(await open(`/f/${C}/ws`));
   const extra = await open(`/f/${C}/ws`);
-  await sleep(300);
+  await closed(extra);
   ok(extra.closeCode === 4008 && extra.closeReason === 'room full', `13th connection to a room is closed with 4008 "room full" (got ${extra.closeCode})`);
   crowd.forEach((w) => w.close());
 
@@ -110,7 +112,7 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
 
   const big = await phone(A, 'daughter');
   big.send('x'.repeat(70 * 1024));
-  await sleep(400);
+  await closed(big);
   ok(big.closeCode === 1009, 'messages over 64 KB are refused');
 
   ok((await fetch(`${BASE}/healthz`).catch(() => null))?.ok, 'relay is still up after the oversized message');

@@ -49,7 +49,8 @@ function newCode() {   // e.g. K7Q2-9XPD-M4TR: 12 chars from 32 symbols (60 bits
 }
 if (process.argv.includes('--new-code')) { console.log(newCode()); process.exit(0); }
 
-const PUBLIC_HOST = !!(process.env.FLY_APP_NAME || process.env.RAILWAY_ENVIRONMENT);
+// PUBLIC=1: a laptop relay exposed to the internet (e.g. through a Cloudflare tunnel) gets the same lockdown.
+const PUBLIC_HOST = !!(process.env.FLY_APP_NAME || process.env.RAILWAY_ENVIRONMENT || process.env.PUBLIC === '1');
 // On the internet, plain /ws would be one room shared with every stranger: family codes only.
 const DEFAULT_ROOM = !PUBLIC_HOST || process.env.ALLOW_DEFAULT_ROOM === '1';
 // On a cloud host the scammer console must not be open to the world.
