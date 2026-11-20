@@ -21,4 +21,21 @@ object LiveLog {
     }
 
     @Synchronized fun text(): String = lines.joinToString("\n")
+
+    // ---------------------------------------------------------------- one-line summary of the current/last call (home screen)
+    @Volatile var callLine: String? = null; private set
+    private var callApp = ""
+    private var verdict: String? = null
+    private var callStartedAt = 0L
+    private val hhmm = SimpleDateFormat("HH:mm", Locale.US)
+
+    @Synchronized fun callStarted(app: String) {
+        callApp = app; verdict = null; callStartedAt = System.currentTimeMillis()
+        callLine = "📞 $app call: checking the caller now…"; version++
+    }
+    @Synchronized fun callVerdict(v: String) { verdict = v; callLine = "📞 $callApp call: $v"; version++ }
+    @Synchronized fun callEnded() {
+        if (callApp.isEmpty()) return
+        callLine = "Last call: $callApp at ${hhmm.format(Date(callStartedAt))} · ${verdict ?: "no family face seen"}"; version++
+    }
 }

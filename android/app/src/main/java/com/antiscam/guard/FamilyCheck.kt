@@ -79,6 +79,7 @@ class FamilyCheck(
             .put("elder", FamilyLink.elderMode)
         FamilyLink.sendTo(role, JSONObject().put("kind", "ping").put("req", req))
         c.status = "verifying"
+        LiveLog.callVerdict("looks like $who, asking $who…")
         FamilyLink.log("push", "Mum → $who's phone: \"Are you calling Mum right now?\" nonce ${nonce.take(8)}…, ${FamilyLink.replySeconds}s. No video, audio or location.")
 
         overlay.show(Level.WARN, "Checking with $who…", countdownText(c, who),
@@ -146,6 +147,7 @@ class FamilyCheck(
                 FamilyLink.log("sec", "✓ Warning signed by ${FamilyLink.nameOf(gid)}'s phone")
                 main.removeCallbacksAndMessages(null)
                 c.status = "warned"
+                LiveLog.callVerdict("⛔ ${FamilyLink.nameOf(gid)} told you to hang up")
                 overlay.show(Level.DANGER, "“${p.optString("text")}”",
                     "✓ Verified message from ${FamilyLink.nameOf(gid)}'s phone.",
                     listOf(Action("HANG UP", Style.BAD) { hangUp() }, Action("Dismiss") { overlay.hide() }))
@@ -194,6 +196,7 @@ class FamilyCheck(
         when (answer) {
             "yes" -> {
                 c.status = "A"
+                LiveLog.callVerdict("✅ $who confirmed it was them")
                 FamilyLink.log("info", "🟢 $who confirmed on their own phone. Call verified.")
                 overlay.show(Level.OK, "🟢 This is really $who", "$who confirmed on their own phone.", autoHideMs = 12_000)
                 alertGuardians(c, "log", "Mum took a verified call from $who", about = role)
@@ -213,6 +216,7 @@ class FamilyCheck(
     private fun scam(c: Call, role: String) {
         val who = FamilyLink.nameOf(role)
         c.status = "B"
+        LiveLog.callVerdict("⛔ scam: $who said it wasn't them")
         alertGuardians(c, "urgent", "🚨 Someone pretending to be $who is video-calling Mum",
             "$who confirmed it's NOT them. Mum has been told to hang up.", about = role)
         overlay.show(Level.DANGER, "⛔ SCAM. Hang up.",
@@ -224,6 +228,7 @@ class FamilyCheck(
     private fun noReply(c: Call, offline: Boolean) {
         val who = FamilyLink.nameOf(c.target ?: "")
         c.status = "C"
+        LiveLog.callVerdict("🟠 couldn't reach $who: secret question")
         FamilyLink.log("info", "🟠 ${if (offline) "Couldn't reach" else "No reply from"} $who. Asking the secret question.")
         alertGuardians(c, "urgent", "⚠️ Couldn't verify a caller who looks like $who",
             if (offline) "$who's phone is offline. Please check on Mum." else "$who didn't reply. Please check on Mum.", about = c.target)
@@ -239,6 +244,7 @@ class FamilyCheck(
     private fun secretAnswer(c: Call, ok: Boolean) {
         if (call !== c) { overlay.hide(); return }
         c.status = if (ok) "secret-ok" else "secret-fail"
+        LiveLog.callVerdict(if (ok) "✅ caller answered the family question" else "⛔ caller failed the family question")
         if (ok) {
             FamilyLink.log("info", "🟢 Caller answered the family secret question.")
             overlay.show(Level.OK, "🟢 Caller answered the family question",

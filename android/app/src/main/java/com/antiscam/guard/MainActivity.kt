@@ -11,6 +11,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
@@ -82,6 +84,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupFamily()
+        find<Button>(R.id.btn_settings).setOnClickListener { showAdvanced(find<View>(R.id.advanced).visibility != View.VISIBLE) }
+        find<Button>(R.id.btn_battery).setOnClickListener { requestBatteryExemption() }
 
         val bar = find<SeekBar>(R.id.threshold)
         bar.progress = ((FaceStore.threshold(this) - 0.6f) * 100).toInt().coerceIn(0, 80)
@@ -108,8 +112,9 @@ class MainActivity : AppCompatActivity() {
 
     private val pollLog = object : Runnable {
         override fun run() {
-            if (FamilyLink.version != familyVersion) { familyVersion = FamilyLink.version; renderFamily() }
+            if (FamilyLink.version != familyVersion) { familyVersion = FamilyLink.version; renderFamily(); renderHome() }
             if (LiveLog.version != logVersion) {
+                renderHome()
                 logVersion = LiveLog.version
                 find<TextView>(R.id.log).text = LiveLog.text().ifEmpty { "Nothing yet." }
                 refreshServiceStatus()
@@ -129,8 +134,78 @@ class MainActivity : AppCompatActivity() {
         find<TextView>(R.id.status_android).text =
             if (Build.VERSION.SDK_INT >= 30) "✅ Android ${Build.VERSION.RELEASE}: automatic face checks supported"
             else "⚠️ Android ${Build.VERSION.RELEASE}: automatic face checks need Android 11 or newer"
+        val batteryOk = isBatteryExempt()
+        find<TextView>(R.id.status_battery).text =
+            if (batteryOk) "✅ Battery saver won't stop protection" else "⚠️ Battery saver may stop protection in the background"
+        find<Button>(R.id.btn_battery).visibility = if (batteryOk) View.GONE else View.VISIBLE
         renderPeople()
         renderFamily()
+        renderHome()
+    }
+
+    // ------------------------------------------------------------------ home: the big status card Mum sees
+
+    private class Fix(val label: String, val action: () -> Unit)
+
+    private fun renderHome() {
+        val serviceOn = isServiceEnabled()
+        val family = FaceStore.load(this).filter { !it.isOwner }
+        // first problem wins: (level, title, detail, fix)
+        val (level, detail, fix) = when {
+            !serviceOn -> Triple(2, "Protection is switched off.", Fix("Turn on protection") { openAccessibilitySettings() })
+            Build.VERSION.SDK_INT < 30 -> Triple(2, "This phone needs Android 11 or newer for automatic checks.", null)
+            !Notifier.canPost(this) -> Triple(1, "Warnings can't be shown on this phone.", Fix("Allow warnings") { find<Button>(R.id.btn_notif).performClick() })
+            family.isEmpty() -> Triple(1, "No family faces added yet.", Fix("Add family faces") { showAdvanced(true); toast("Add each person in section 2 with 📷") })
+            !isBatteryExempt() -> Triple(1, "Battery saver may switch protection off.", Fix("Keep protection on") { requestBatteryExemption() })
+            FamilyLink.enabled && !FamilyLink.connected -> Triple(1, "Can't reach the family phones right now. Warnings still work.", null)
+            else -> Triple(0, "Video calls on WhatsApp, Instagram, Messenger and Telegram are checked.", null)
+        }
+        val (icon, title, color) = when (level) {
+            0 -> Triple("🛡️", "Protected", 0xFF166534.toInt())
+            1 -> Triple("🛡️", "Partly protected", 0xFF92400E.toInt())
+            else -> Triple("⚠️", "Not protected", 0xFF991B1B.toInt())
+        }
+        find<LinearLayout>(R.id.home_card).background = GradientDrawable().apply {
+            cornerRadius = 28 * resources.displayMetrics.density; setColor(color)
+        }
+        find<TextView>(R.id.home_icon).text = icon
+        find<TextView>(R.id.home_title).text = title
+        find<TextView>(R.id.home_detail).text = detail
+        val familyLine = when {
+            FamilyLink.enabled -> FamilyLink.MEMBERS.entries.joinToString("    ") { (role, name) ->
+                "$name ${if (FamilyLink.isOnline(role)) "🟢" else "⚪"}" }
+            family.isNotEmpty() -> "Family: ${family.joinToString(", ") { it.name.replaceFirstChar { c -> c.uppercase() } }}"
+            else -> ""
+        }
+        find<TextView>(R.id.home_family).apply { text = familyLine; visibility = if (familyLine.isEmpty()) View.GONE else View.VISIBLE }
+        find<TextView>(R.id.home_last).text = LiveLog.callLine ?: "No video calls checked yet."
+        find<Button>(R.id.btn_fix).apply {
+            visibility = if (fix == null) View.GONE else View.VISIBLE
+            text = fix?.label ?: ""
+            // solid white button with the card's colour as text: readable on red/amber for older eyes
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            setTextColor(color)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setOnClickListener { fix?.action?.invoke() }
+        }
+    }
+
+    private fun showAdvanced(show: Boolean) {
+        find<View>(R.id.advanced).visibility = if (show) View.VISIBLE else View.GONE
+        find<Button>(R.id.btn_settings).text = if (show) "Hide settings" else "⚙ Settings & setup"
+    }
+
+    // ------------------------------------------------------------------ battery saver
+
+    private fun isBatteryExempt(): Boolean =
+        getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: true
+
+    private fun requestBatteryExemption() {
+        try {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+        } catch (_: Throwable) {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) // some phones hide the direct prompt
+        }
     }
 
     private fun refreshServiceStatus() {

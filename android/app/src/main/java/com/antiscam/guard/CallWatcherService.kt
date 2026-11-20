@@ -122,6 +122,7 @@ class CallWatcherService : AccessibilityService() {
         people = FaceStore.load(this)
         votes.clear(); lastDecision = null; overlaysShown.clear(); recentFamily.clear(); joinLogged.clear()
         LiveLog.add("📞 $app call detected. Checking the caller's face…")
+        LiveLog.callStarted(app)
         Notifier.status(this, "$app call: looking at the caller's face on this phone")
         if (people.none { !it.isOwner }) LiveLog.add("No family faces enrolled yet. Add some in the app.")
         family.begin(app)
@@ -134,6 +135,7 @@ class CallWatcherService : AccessibilityService() {
         Notifier.clearStatus(this)
         overlay.hide()
         family.end()
+        LiveLog.callEnded()
     }
 
     /** Roots of the call app's windows (the call screen may not be the "active" window while our card is up). */
@@ -205,6 +207,7 @@ class CallWatcherService : AccessibilityService() {
     /** Runs the family check as if a call from [role] were on screen (no WhatsApp call needed). */
     fun simulateCall(role: String) {
         overlay.hide()
+        LiveLog.callStarted("Test")
         family.begin("Test")
         family.verify(role, "test from the app, no real call")
     }
@@ -353,6 +356,7 @@ class CallWatcherService : AccessibilityService() {
             top == "?stranger" && claimed != null -> {
                 LiveLog.add("🚨 Screen says \"$claimed\" but the face doesn't match.")
                 FamilyLink.roleForName(claimed)?.let { family.nameButNotFace(it) }
+                LiveLog.callVerdict("⚠️ says \"$claimed\" but the face doesn't match")
                 showOnce(decision, WarningOverlay.Level.DANGER, "This may NOT be $claimed",
                     "The face doesn't look like $claimed. Don't send money or share codes. " +
                         "Hang up and call $claimed back on their usual number.") { hangUpFromOverlay() }
@@ -363,6 +367,7 @@ class CallWatcherService : AccessibilityService() {
             }
             top == "?stranger" -> {
                 LiveLog.add("Caller is not one of your family faces.")
+                LiveLog.callVerdict("not someone in your family")
                 showOnce(decision, WarningOverlay.Level.INFO, "Not someone in your family",
                     "Be careful if this caller asks for money or codes.")
                 Notifier.alert(this, "Caller isn't in your family list",
@@ -378,6 +383,7 @@ class CallWatcherService : AccessibilityService() {
             else -> {
                 val nameNote = if (claimed != null && !claimed.equals(top, true)) " The screen shows \"$claimed\"." else ""
                 LiveLog.add("👀 Caller looks like $top.$nameNote Warning shown.")
+                LiveLog.callVerdict("looks like $top (not confirmed)")
                 showOnce(decision, WarningOverlay.Level.WARN, "Looks like $top, but check first",
                     "Faces can be faked.$nameNote If they ask for money, hang up and call $top back yourself.") { hangUpFromOverlay() }
                 Notifier.alert(this, "📞 This video call looks like $top",

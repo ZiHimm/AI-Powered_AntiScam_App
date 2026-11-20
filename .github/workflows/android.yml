@@ -1,4 +1,4 @@
-# Builds the Android APK on every push that touches android/ and publishes it as a
+# Runs the unit tests, then builds the Android APK on every push that touches android/, and publishes it as a
 # public download: Releases → "Android app (latest build)" → AntiScamGuard.apk
 name: Android APK
 
@@ -30,6 +30,16 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Upload test report (if tests failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: android/app/build/reports/tests/testDebugUnitTest/
 
       - name: Build APK
         run: ./gradlew assembleDebug --no-daemon

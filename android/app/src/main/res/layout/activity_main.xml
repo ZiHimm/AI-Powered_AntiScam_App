@@ -11,21 +11,52 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- HOME: what Mum sees -->
+        <LinearLayout
+            android:id="@+id/home_card"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🛡 AntiScam Guard"
-            android:textColor="#E6EDF3"
-            android:textSize="26sp"
-            android:textStyle="bold" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView android:id="@+id/home_icon" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="64sp" />
+            <TextView android:id="@+id/home_title" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:gravity="center" android:textColor="#FFFFFF" android:textSize="30sp" android:textStyle="bold" />
+            <TextView android:id="@+id/home_detail" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="6dp" android:gravity="center" android:textColor="#F0F6FC" android:textSize="19sp" />
+            <TextView android:id="@+id/home_family" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:gravity="center" android:textColor="#F0F6FC" android:textSize="20sp" />
+            <TextView android:id="@+id/home_last" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" android:gravity="center" android:textColor="#D0D7DE" android:textSize="16sp" />
+            <Button android:id="@+id/btn_fix" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:textSize="20sp" android:visibility="gone" />
+        </LinearLayout>
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Checks the face on WhatsApp and Instagram video calls against your family. Everything stays on this phone."
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="Checks the face on WhatsApp and Instagram video calls, and asks your family to confirm. Everything stays on this phone."
             android:textColor="#8B949E"
-            android:textSize="14sp" />
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btn_settings"
+            style="@style/Btn"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:text="⚙ Settings &amp; setup" />
+
+        <!-- ADVANCED: setup, faces, tests, family relay, log (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/advanced"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
 
         <!-- 1. Setup -->
         <TextView style="@style/Section" android:text="1 · Turn on protection" />
@@ -37,6 +68,9 @@
         <Button android:id="@+id/btn_notif" style="@style/Btn" android:text="Allow notifications" />
 
         <TextView android:id="@+id/status_android" style="@style/Body" />
+
+        <TextView android:id="@+id/status_battery" style="@style/Body" />
+        <Button android:id="@+id/btn_battery" style="@style/Btn" android:text="Don't let battery saver stop it" />
 
         <!-- 2. Faces -->
         <TextView style="@style/Section" android:text="2 · Family faces" />
@@ -69,13 +103,13 @@
         <TextView style="@style/Section" android:text="4 · Family phones" />
         <TextView
             style="@style/Body"
-            android:text="Connect to the laptop relay (mobile/ folder) so the REAL Son or Daughter is asked “Are you calling Mum?” on their own phone. Enrol their faces here named exactly Son and Daughter." />
+            android:text="Connect to the family relay (cloud address, or the laptop) so the REAL Son or Daughter is asked “Are you calling Mum?” on their own phone. Enrol their faces here named exactly Son and Daughter." />
 
         <EditText
             android:id="@+id/relay_addr"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Relay address, e.g. 192.168.1.104:8000"
+            android:hint="Relay address, e.g. https://…fly.dev/f/CODE or 192.168.1.104:8000"
             android:imeOptions="actionDone"
             android:inputType="textUri"
             android:singleLine="true"
@@ -123,5 +157,6 @@
             android:textColor="#C9D1D9"
             android:textIsSelectable="true"
             android:textSize="11sp" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
