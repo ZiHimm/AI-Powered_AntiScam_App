@@ -1,5 +1,6 @@
 package com.antiscam.guard
 
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -13,6 +14,7 @@ object LiveLog {
     @Volatile var version = 0L; private set
 
     @Synchronized fun add(msg: String) {
+        Log.i("AntiScamGuard", msg) // also readable over USB: adb logcat -s AntiScamGuard
         lines.addFirst("${fmt.format(Date())}  $msg")
         while (lines.size > 60) lines.removeLast()
         version++
