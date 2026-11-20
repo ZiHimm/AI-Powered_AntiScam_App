@@ -250,7 +250,10 @@ object FamilyLink {
             p.optJSONObject("pub")?.let { learnKey(id, it) }
             if (was != isOnline) {
                 LiveLog.add("${nameOf(id)}'s phone is ${if (isOnline) "online" else "OFFLINE"}")
-                if (isOnline) sendProfile(id)   // introduce ourselves to a member who just came online
+                if (isOnline) {
+                    sendProfile(id)                          // introduce ourselves to a member who just came online
+                    if (m.v2) FaceShare.sendMyFace(id)       // and re-send our face: they may have been offline when it changed
+                }
             }
         }
         sendConfig()

@@ -534,7 +534,7 @@ class MainActivity : AppCompatActivity() {
                 text = "✕"; setOnClickListener {
                     AlertDialog.Builder(this@MainActivity)
                         .setMessage("Remove ${p.name} and their face data?")
-                        .setPositiveButton("Remove") { _, _ -> FaceStore.remove(this@MainActivity, p.name); renderPeople() }
+                        .setPositiveButton("Remove") { _, _ -> FaceStore.remove(this@MainActivity, p.name); if (p.isOwner) FaceShare.sendMyFace(); renderPeople() }
                         .setNegativeButton("Cancel", null).show()
                 }
             })
