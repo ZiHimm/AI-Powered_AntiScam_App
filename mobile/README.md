@@ -8,6 +8,12 @@ demo at the repo root is untouched and still works as a backup.
   guardians get signed alerts. Each phone has its own ECDSA P-256 key, kept on the phone; the others' keys are
   pinned when they first connect, so a device with a different key is not trusted.
 - **Phone feel:** vibration, Android notifications, real fingerprint prompt (BiometricPrompt) before Yes/No.
+- **Works in the background:** in the app, the relay connection lives in a native foreground service
+  (`RelayKeepAliveService`, quiet "Family Verify is connected" notification), not in the WebView. While another app
+  is in front (e.g. WhatsApp), Android would otherwise freeze the app and the WebView puts hidden pages to sleep, so
+  requests were never seen. The service stays connected and pops up "Are you calling Mum right now?" and family
+  alerts; tapping opens the request in the app. Alert pop-ups are generic on purpose: the signature is checked in the
+  app before any alert text is shown. Browsers (tests, monitor) still use a plain WebSocket.
 - **Laptop monitor** (`/monitor.html`): live log from every phone, presenter buttons (start call on Mum,
   reset all phones, skip to "no reply"), and a **scammer console** that injects forged and replayed alerts.
 - **Faces:** enrol on Mum's phone (camera/photo), or Son/Daughter tap **Scan my face & send** on their own phone
@@ -66,5 +72,6 @@ www/index.html      phone UI (role picker, Mum screen, member screen, ⚙ drawer
 www/app.js          roles, network, keys + pinning, face pipeline, call state machine, alerts
 www/mobile.css      full-screen phone styles on top of www/styles.css (copy of the root demo's)
 www/monitor.*       laptop monitor + scammer console
-android/            Capacitor Android project (camera/notification permissions, keep-screen-on)
+android/            Capacitor Android project (camera/notification permissions, keep-screen-on,
+                    RelayKeepAliveService + NativeRelayPlugin: relay socket and pop-ups in the background)
 ```

@@ -164,44 +164,67 @@ function renderKeyInfo() {
 }
 
 // ---------------------------------------------------------------- network (WebSocket relay = push stand-in)
+// In the Android app the socket lives in a native foreground service (NativeRelay), so it keeps working while
+// another app is in front and pops up a notification for requests. In a browser it's a plain WebSocket.
+const NativeRelay = isNative ? Plugins.NativeRelay : null;
 const net = {
-  ws: null, ok: false, url: '', peers: {}, timer: null,
-  raw(obj) { if (this.ok) { try { this.ws.send(JSON.stringify(obj)); } catch { /* ignore */ } } },
+  ws: null, ok: false, url: '', peers: {}, timer: null, native: !!NativeRelay, nativeWired: false,
+  raw(obj) {
+    if (!this.ok) return;
+    const data = JSON.stringify(obj);
+    if (this.native) { NativeRelay.send({ data }).catch(() => {}); return; }
+    try { this.ws.send(data); } catch { /* ignore */ }
+  },
 };
 const isOnline = (r) => !!net.peers[r]?.online;
+const helloMsg = () => JSON.stringify({ t: 'hello', role: ROLE, pub: myKey.jwk, name: nm(ROLE) });
+
+function onRelayText(data) {
+  let m;
+  try { m = JSON.parse(data); } catch { return; }
+  if (m.t === 'peers') onPeers(m.peers);
+  else if (m.t === 'msg') onMessage(m.from, m.body || {});
+  else if (m.t === 'undeliverable') log('warn', `✗ ${nm(m.to)}'s phone is not connected. "${esc(m.kind)}" was not delivered.`);
+}
+function onRelayClosed(code) {
+  net.ok = false;
+  if (code === 4000) {
+    // another phone connected with the same role: don't fight over it, wait for the user
+    net.replaced = true;
+    setNetStatus(false, `another phone is using the ${nm(ROLE)} role. Tap "Save & reconnect" to take it back`);
+    log('warn', `Disconnected: another phone connected as ${nm(ROLE)}. Two phones can't share a role.`);
+    return false;
+  }
+  setNetStatus(false);
+  return true; // caller may retry
+}
 
 function connect() {
   clearTimeout(net.timer);
   net.replaced = false;
-  if (net.ws) { net.ws.onclose = null; try { net.ws.close(); } catch { /* ignore */ } }
   net.url = `${cfg.relay.replace(/\/+$/, '')}/ws`;
+  if (net.native) {
+    if (!net.nativeWired) {
+      net.nativeWired = true;
+      NativeRelay.addListener('message', (e) => onRelayText(e.data));
+      NativeRelay.addListener('state', (e) => {
+        if (e.open) { net.ok = true; setNetStatus(true); } else onRelayClosed(e.code); // the service retries by itself
+      });
+    }
+    NativeRelay.connect({ url: net.url, hello: helloMsg() }).catch((err) => setNetStatus(false, err.message));
+    return;
+  }
+  if (net.ws) { net.ws.onclose = null; try { net.ws.close(); } catch { /* ignore */ } }
   let ws;
   try { ws = new WebSocket(net.url); } catch (e) { setNetStatus(false, e.message); net.timer = setTimeout(connect, 2000); return; }
   net.ws = ws;
   ws.onopen = () => {
     net.ok = true;
-    ws.send(JSON.stringify({ t: 'hello', role: ROLE, pub: myKey.jwk, name: nm(ROLE) }));
+    ws.send(helloMsg());
     setNetStatus(true);
   };
-  ws.onmessage = (ev) => {
-    let m;
-    try { m = JSON.parse(ev.data); } catch { return; }
-    if (m.t === 'peers') onPeers(m.peers);
-    else if (m.t === 'msg') onMessage(m.from, m.body || {});
-    else if (m.t === 'undeliverable') log('warn', `✗ ${nm(m.to)}'s phone is not connected. "${esc(m.kind)}" was not delivered.`);
-  };
-  ws.onclose = (ev) => {
-    net.ok = false;
-    if (ev.code === 4000) {
-      // another phone connected with the same role: don't fight over it, wait for the user
-      net.replaced = true;
-      setNetStatus(false, `another phone is using the ${nm(ROLE)} role. Tap "Save & reconnect" to take it back`);
-      log('warn', `Disconnected: another phone connected as ${nm(ROLE)}. Two phones can't share a role.`);
-      return;
-    }
-    setNetStatus(false);
-    net.timer = setTimeout(connect, 1500);
-  };
+  ws.onmessage = (ev) => onRelayText(ev.data);
+  ws.onclose = (ev) => { if (onRelayClosed(ev.code)) net.timer = setTimeout(connect, 1500); };
   ws.onerror = () => {};
 }
 // Coming back to the front (e.g. after a WhatsApp call). While hidden, the WebView puts this page to sleep and
@@ -297,6 +320,9 @@ function vibrate(pattern) {
 let notifId = 1;
 async function osNotify(title, body, { urgent = false, actions = null } = {}) {
   if (!LocalNotifications || !isNative) return;
+  // Son/Daughter: the native relay service already pops up requests/alerts while the app isn't on screen,
+  // and in front the in-app card shows them. A second notification here would only duplicate it.
+  if (net.native && ROLE !== 'mum') return;
   try {
     await LocalNotifications.schedule({
       notifications: [{
@@ -1315,10 +1341,11 @@ function wireCommon() {
     saveCfg();
     connect();
   });
-  $('#btn-change-role').addEventListener('click', () => {
+  $('#btn-change-role').addEventListener('click', async () => {
     if (!confirm('Change whose phone this is?')) return;
     delete cfg.role;
     saveCfg();
+    if (net.native) await NativeRelay.disconnect().catch(() => {}); // don't keep holding the old role's slot
     location.href = location.pathname;
   });
   $('#btn-forget-pins').addEventListener('click', () => {
