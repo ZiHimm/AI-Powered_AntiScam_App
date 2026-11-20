@@ -8,14 +8,14 @@ import com.antiscam.guard.WarningOverlay.Level
 import com.antiscam.guard.WarningOverlay.Style
 
 /**
- * Mum's side of the family check, over the relay (same flow as mobile/www/app.js, shown over the call):
+ * The protected person's side of the family check ("me" = this phone's owner; Mum in the classic demo), shown over the call:
  *
- *   face ≈ Son → ping Son's phone "Are you calling Mum right now?" (single-use nonce, 15 s)
+ *   face ≈ Son → ping Son's phone "Are you calling <me> right now?" (signed, single-use nonce, 30 s)
  *     ├─ Son: YES (signed)  → 🟢 "This is really Son"
  *     ├─ Son: NO  (signed)  → 🔴 SCAM, hang up            + urgent signed alert to guardians (Elder Mode)
  *     └─ no reply / offline → 🟠 ask the secret question   + urgent signed alert to guardians (Elder Mode)
  *
- * Guardians can answer from their phones: "Call Mum now" / signed "Tell Mum to hang up".
+ * My guardians (if I'm a senior) can answer from their phones: "Call <me> now" / signed "Tell <me> to hang up".
  * Runs on the main thread.
  */
 class FamilyCheck(
@@ -75,21 +75,22 @@ class FamilyCheck(
         c.expires = now + FamilyLink.replySeconds * 1000L
         val req = JSONObject()
             .put("type", "verify-request").put("callId", c.id).put("to", role).put("nonce", nonce)
-            .put("prompt", "Are you calling Mum right now?").put("ts", now).put("expires", c.expires)
-            .put("elder", FamilyLink.elderMode)
+            .put("prompt", "Are you calling ${me()} right now?").put("ts", now).put("expires", c.expires)
+            .put("elder", FamilyLink.senior)
+            .put("v", 2).put("callee", FamilyLink.me).put("calleeName", me())
         // Signed, so a stranger on the relay can't send Son a fake "Are you calling Mum?". `req` stays for apps that
         // don't check signatures yet (Family Verify); they ignore the extra `env`.
         FamilyLink.sendTo(role, JSONObject().put("kind", "ping").put("req", req).put("env", DeviceKey.sign(req)))
         c.status = "verifying"
         LiveLog.callVerdict("looks like $who, asking $who…")
-        FamilyLink.log("push", "Mum → $who's phone: \"Are you calling Mum right now?\" nonce ${nonce.take(8)}…, ${FamilyLink.replySeconds}s. No video, audio or location.")
+        FamilyLink.log("push", "${me()} → $who's phone: \"Are you calling ${me()} right now?\" nonce ${nonce.take(8)}…, ${FamilyLink.replySeconds}s. No video, audio or location.")
 
         overlay.show(Level.WARN, "Checking with $who…", countdownText(c, who),
             listOf(Action("Hang up", Style.BAD) { hangUp() }), autoHideMs = 0)
         tickCountdown(c, who)
         main.postDelayed({ if (call === c && c.status == "verifying") onReply(role, nonce, "timeout") }, FamilyLink.replySeconds * 1000L)
 
-        alertGuardians(c, "info", "Mum is getting a video call from someone who looks like $who",
+        alertGuardians(c, "info", "${me()} is getting a video call from someone who looks like $who",
             "Checking with $who's phone now…", about = role)
     }
 
@@ -129,7 +130,7 @@ class FamilyCheck(
                 val env = body.optJSONObject("env") ?: return
                 val p = try { JSONObject(env.getString("body")) } catch (_: Throwable) { return }
                 val sender = p.optString("from")
-                if (sender !in FamilyLink.MEMBERS.keys || !FamilyLink.verifyFrom(env, sender)) {
+                if (sender != from || !FamilyLink.isMember(sender) || !FamilyLink.verifyFrom(env, sender)) {
                     FamilyLink.log("attack", "✗ Rejected a reply claiming to be from ${FamilyLink.nameOf(sender)}: bad signature")
                     return
                 }
@@ -140,7 +141,7 @@ class FamilyCheck(
                 val env = body.optJSONObject("env") ?: return
                 val p = try { JSONObject(env.getString("body")) } catch (_: Throwable) { return }
                 val gid = p.optString("from")
-                if (gid !in FamilyLink.MEMBERS.keys || !FamilyLink.verifyFrom(env, gid)) {
+                if (gid != from || !FamilyLink.isMember(gid) || !FamilyLink.verifyFrom(env, gid)) {
                     FamilyLink.log("attack", "✗ Rejected a \"hang up\" message claiming to be from ${FamilyLink.nameOf(gid)}: bad signature")
                     return
                 }
@@ -157,7 +158,7 @@ class FamilyCheck(
             "guardian-call" -> {
                 val c = call ?: return
                 if (body.optString("callId") != c.id) return
-                FamilyLink.log("info", "📞 ${FamilyLink.nameOf(from)} is calling Mum.")
+                FamilyLink.log("info", "📞 ${FamilyLink.nameOf(from)} is calling ${me()}.")
                 overlay.show(Level.INFO, "📞 ${FamilyLink.nameOf(from)} is calling you now",
                     "Hang up this video call and answer ${FamilyLink.nameOf(from)}.",
                     listOf(Action("Hang up", Style.BAD) { hangUp() }, Action("Dismiss") { overlay.hide() }), autoHideMs = 0)
@@ -201,7 +202,7 @@ class FamilyCheck(
                 LiveLog.callVerdict("✅ $who confirmed it was them")
                 FamilyLink.log("info", "🟢 $who confirmed on their own phone. Call verified.")
                 overlay.show(Level.OK, "🟢 This is really $who", "$who confirmed on their own phone.", autoHideMs = 12_000)
-                alertGuardians(c, "log", "Mum took a verified call from $who", about = role)
+                alertGuardians(c, "log", "${me()} took a verified call from $who", about = role)
             }
             "no" -> {
                 FamilyLink.log("info", "🔴 $who says it is NOT them. Scam call.")
@@ -219,8 +220,8 @@ class FamilyCheck(
         val who = FamilyLink.nameOf(role)
         c.status = "B"
         LiveLog.callVerdict("⛔ scam: $who said it wasn't them")
-        alertGuardians(c, "urgent", "🚨 Someone pretending to be $who is video-calling Mum",
-            "$who confirmed it's NOT them. Mum has been told to hang up.", about = role)
+        alertGuardians(c, "urgent", "🚨 Someone pretending to be $who is video-calling ${me()}",
+            "$who confirmed it's NOT them. ${me()} has been told to hang up.", about = role)
         overlay.show(Level.DANGER, "⛔ SCAM. Hang up.",
             "The real $who says this is NOT them. Don't send money or share codes.${toldText(c)}",
             listOf(Action("HANG UP", Style.BAD) { hangUp() }, Action("Dismiss") { overlay.hide() }))
@@ -233,7 +234,7 @@ class FamilyCheck(
         LiveLog.callVerdict("🟠 couldn't reach $who: secret question")
         FamilyLink.log("info", "🟠 ${if (offline) "Couldn't reach" else "No reply from"} $who. Asking the secret question.")
         alertGuardians(c, "urgent", "⚠️ Couldn't verify a caller who looks like $who",
-            if (offline) "$who's phone is offline. Please check on Mum." else "$who didn't reply. Please check on Mum.", about = c.target)
+            if (offline) "$who's phone is offline. Please check on ${me()}." else "$who didn't reply. Please check on ${me()}.", about = c.target)
         overlay.show(Level.WARN, "🟠 Couldn't check with $who",
             "Ask the caller: “${FamilyLink.secretQuestion}”\nNo answer, no money.${toldText(c)}",
             listOf(
@@ -253,8 +254,8 @@ class FamilyCheck(
                 "Checked by question, not by phone. Still be careful with money.", autoHideMs = 10_000)
         } else {
             FamilyLink.log("info", "🔴 Caller could NOT answer the secret question.")
-            alertGuardians(c, "urgent", "🚨 Caller failed Mum's family secret question",
-                "Mum has been told to hang up. Please call her.", about = c.target)
+            alertGuardians(c, "urgent", "🚨 Caller failed ${me()}'s family secret question",
+                "${me()} has been told to hang up. Please call them.", about = c.target)
             overlay.show(Level.DANGER, "⛔ No answer, no money", "They couldn't answer. Hang up now.${toldText(c)}",
                 listOf(Action("HANG UP", Style.BAD) { hangUp() }, Action("Dismiss") { overlay.hide() }))
         }
@@ -265,27 +266,30 @@ class FamilyCheck(
     fun nameButNotFace(claimedRole: String) {
         val c = call ?: return
         val who = FamilyLink.nameOf(claimedRole)
-        alertGuardians(c, "urgent", "🚨 Someone using $who's name is video-calling Mum",
-            "The face doesn't match $who. Mum has been warned.", about = claimedRole)
+        alertGuardians(c, "urgent", "🚨 Someone using $who's name is video-calling ${me()}",
+            "The face doesn't match $who. ${me()} has been warned.", about = claimedRole)
     }
 
     private fun alertGuardians(c: Call, level: String, title: String, body: String = "", about: String? = null) {
-        if (!FamilyLink.elderMode || !FamilyLink.connected) return
+        if (!FamilyLink.senior || !FamilyLink.connected) return   // only seniors' guardians are alerted
         var to = FamilyLink.guardians().filter { it != about }
         if (to.isEmpty()) to = FamilyLink.guardians()
-        if (to.isEmpty()) { FamilyLink.log("warn", "Mum has no guardians chosen, so no one was alerted."); return }
+        if (to.isEmpty()) { FamilyLink.log("warn", "${me()} has no guardians chosen, so no one was alerted."); return }
         val payload = JSONObject()
             .put("type", "guardian-alert").put("level", level).put("title", title).put("body", body)
-            .put("about", about ?: JSONObject.NULL).put("callId", c.id).put("from", "mum")
+            .put("about", about ?: JSONObject.NULL).put("callId", c.id).put("from", FamilyLink.me)
+            .put("v", 2).put("callee", FamilyLink.me).put("calleeName", me())
             .put("ts", System.currentTimeMillis()).put("nonce", FamilyLink.randHex(12))
         val env = DeviceKey.sign(payload)
         val sentTo = to.filter { FamilyLink.sendTo(it, JSONObject().put("kind", "alert").put("env", env)) }
         c.notified += sentTo
         val label = mapOf("urgent" to "🚨 Urgent alert", "info" to "Heads-up", "log" to "Silent log")[level]
-        FamilyLink.log("sec", "$label signed by Mum's phone → ${to.joinToString(" + ") { FamilyLink.nameOf(it) }}" +
+        FamilyLink.log("sec", "$label signed by ${me()}'s phone → ${to.joinToString(" + ") { FamilyLink.nameOf(it) }}" +
             if (sentTo.size < to.size) " (${(to - sentTo.toSet()).joinToString { FamilyLink.nameOf(it) }} offline)" else "")
     }
 
     private fun toldText(c: Call) =
         if (c.notified.isEmpty()) "" else "\n${c.notified.joinToString(" and ") { FamilyLink.nameOf(it) }} ${if (c.notified.size > 1) "have" else "has"} been told."
+
+    private fun me() = FamilyLink.myName
 }

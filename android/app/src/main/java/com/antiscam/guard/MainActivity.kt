@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private val selfies = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val n = r.data?.getIntExtra(EnrolActivity.EXTRA_ADDED, 0) ?: 0
         if (n > 0) toast("Added $n face sample(s)")
+        if (n > 0) FaceShare.sendMyFace()   // if it was my own face, the family's phones get it (signed)
         renderPeople()
     }
 
@@ -66,9 +67,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FamilyLink.init(this)
-        if (FamilyLink.myRole != null && !FamilyLink.isMum) { openFamilyMode(); return }  // Son's / Daughter's phone
         setContentView(R.layout.activity_main)
-        if (FamilyLink.myRole == null) main.post { askWhosePhone() }
+        MemberHub.init(this); FamilyLink.listeners.add(MemberHub)
+        if (FamilyLink.myRole == null) main.post { askWhoAmI() }
         engine = FaceEngine.get(this)
         Notifier.ensureChannels(this)
 
@@ -146,35 +147,54 @@ class MainActivity : AppCompatActivity() {
         renderHome()
     }
 
-    // ------------------------------------------------------------------ one app: whose phone is this?
+    // ------------------------------------------------------------------ one app: who am I in the family?
 
-    private fun askWhosePhone() {
-        val options = arrayOf("👵  Mum: protect my video calls", "👦  Son: answer for Mum, get her alerts", "👩  Daughter: answer for Mum, get her alerts")
-        AlertDialog.Builder(this).setTitle("Whose phone is this?").setCancelable(false)
-            .setItems(options) { _, i ->
-                val role = listOf("mum", "son", "daughter")[i]
-                val changed = FamilyLink.myRole != role
-                FamilyLink.myRole = role
-                if (changed && FamilyLink.enabled) FamilyLink.restart()
-                if (role == "mum") refresh() else openFamilyMode()
+    /** First launch (and "Change my name / setup"): name → member id, senior citizen?, check my calls? */
+    private fun askWhoAmI() {
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val name = EditText(this).apply { hint = "Your name in the family (e.g. Mum, Dad, Aisha)"; setText(FamilyLink.myRole?.let { FamilyLink.myName } ?: "") }
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf("Mum", "Dad", "Son", "Daughter").forEach { n ->
+            chips.addView(Button(this).apply { text = n; isAllCaps = false; setOnClickListener { name.setText(n) } },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        val senior = CheckBox(this).apply { text = "I'm a senior citizen: alert my guardians if a scammer targets me"; isChecked = FamilyLink.senior }
+        val protect = CheckBox(this).apply { text = "Check my incoming video calls on this phone"; isChecked = FamilyLink.protect }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0)
+            addView(name); addView(chips); addView(senior); addView(protect)
+            addView(TextView(context).apply { text = "Use the same names your family uses (Mum, Son…) so everyone's phone matches."; textSize = 13f; setPadding(0, pad / 2, 0, 0) })
+        }
+        AlertDialog.Builder(this).setTitle("Who are you in the family?").setView(form).setCancelable(FamilyLink.myRole != null)
+            .setPositiveButton("Save") { _, _ ->
+                val n = name.text.toString().trim()
+                val id = FamilyLink.idForName(n)
+                if (id.isEmpty()) { toast("Enter your name"); main.post { askWhoAmI() }; return@setPositiveButton }
+                val changed = FamilyLink.myRole != id
+                FamilyLink.myName = n; FamilyLink.myRole = id
+                FamilyLink.senior = senior.isChecked; FamilyLink.protect = protect.isChecked
+                if (changed && FamilyLink.enabled) { FamilyLink.restart() }
+                refresh()
             }.show()
     }
 
-    private fun openFamilyMode() {
-        FamilyLink.stop() // the family-mode service owns the connection on Son's/Daughter's phone
-        startActivity(Intent(this, FamilyActivity::class.java))
-        finish()
-    }
-
-    // ------------------------------------------------------------------ home: the big status card Mum sees
+    // ------------------------------------------------------------------ home: the big status card
 
     private class Fix(val label: String, val action: () -> Unit)
 
     private fun renderHome() {
         val serviceOn = isServiceEnabled()
         val family = FaceStore.load(this).filter { !it.isOwner }
+        val open = MemberHub.openQuestions
+        find<Button>(R.id.btn_inbox).apply {
+            text = if (open > 0) "📬 $open question${if (open > 1) "s" else ""} for you: tap to answer" else "📬 Family questions & alerts"
+            setOnClickListener { startActivity(Intent(this@MainActivity, FamilyActivity::class.java)) }
+        }
         // first problem wins: (level, title, detail, fix)
         val (level, detail, fix) = when {
+            !FamilyLink.protect -> Triple(if (FamilyLink.connected) 0 else 1,
+                "My calls aren't checked on this phone. I'll be asked when someone who looks like me calls the family.",
+                if (FamilyLink.enabled) null else Fix("Connect to my family") { showAdvanced(true); toast("Enter the relay address in section 4") })
             !serviceOn -> Triple(2, "Protection is switched off.", Fix("Turn on protection") { openAccessibilitySettings() })
             Build.VERSION.SDK_INT < 30 -> Triple(2, "This phone needs Android 11 or newer for automatic checks.", null)
             !Notifier.canPost(this) -> Triple(1, "Warnings can't be shown on this phone.", Fix("Allow warnings") { find<Button>(R.id.btn_notif).performClick() })
@@ -184,7 +204,7 @@ class MainActivity : AppCompatActivity() {
             else -> Triple(0, "Video calls on WhatsApp, Instagram, Messenger and Telegram are checked.", null)
         }
         val (icon, title, color) = when (level) {
-            0 -> Triple("🛡️", "Protected", 0xFF166534.toInt())
+            0 -> Triple("🛡️", if (FamilyLink.protect) "Protected" else "Family alerts on", 0xFF166534.toInt())
             1 -> Triple("🛡️", "Partly protected", 0xFF92400E.toInt())
             else -> Triple("⚠️", "Not protected", 0xFF991B1B.toInt())
         }
@@ -195,8 +215,8 @@ class MainActivity : AppCompatActivity() {
         find<TextView>(R.id.home_title).text = title
         find<TextView>(R.id.home_detail).text = detail
         val familyLine = when {
-            FamilyLink.enabled -> FamilyLink.MEMBERS.entries.joinToString("    ") { (role, name) ->
-                "$name ${if (FamilyLink.isOnline(role)) "🟢" else "⚪"}" }
+            FamilyLink.enabled && FamilyLink.members.isNotEmpty() -> FamilyLink.others().joinToString("    ") { m ->
+                "${FamilyLink.nameOf(m.id)} ${if (m.online) "🟢" else "⚪"}" }
             family.isNotEmpty() -> "Family: ${family.joinToString(", ") { it.name.replaceFirstChar { c -> c.uppercase() } }}"
             else -> ""
         }
@@ -268,9 +288,8 @@ class MainActivity : AppCompatActivity() {
         val on = find<Switch>(R.id.family_on)
         addr.setText(FamilyLink.relay)
         on.isChecked = FamilyLink.enabled
-        find<Switch>(R.id.elder_on).isChecked = FamilyLink.elderMode
-        find<CheckBox>(R.id.g_son).isChecked = FamilyLink.isGuardian("son")
-        find<CheckBox>(R.id.g_daughter).isChecked = FamilyLink.isGuardian("daughter")
+        find<Switch>(R.id.elder_on).isChecked = FamilyLink.senior
+        find<Switch>(R.id.protect_on).isChecked = FamilyLink.protect
         find<EditText>(R.id.secret_q).setText(FamilyLink.secretQuestion)
 
         fun saveAddr() {
@@ -283,11 +302,10 @@ class MainActivity : AppCompatActivity() {
             saveAddr()
             if (checked && FamilyLink.relay.isBlank()) { toast("Enter the relay address shown on the laptop first"); on.isChecked = false; return@setOnCheckedChangeListener }
             FamilyLink.enabled = checked
-            if (checked) FamilyLink.restart() else FamilyLink.stop()
+            if (checked) { FamilyService.start(this); FamilyLink.restart() } else { FamilyService.stop(this); FamilyLink.stop() }
         }
-        find<Switch>(R.id.elder_on).setOnCheckedChangeListener { _, c -> FamilyLink.elderMode = c }
-        find<CheckBox>(R.id.g_son).setOnCheckedChangeListener { _, c -> FamilyLink.setGuardian("son", c) }
-        find<CheckBox>(R.id.g_daughter).setOnCheckedChangeListener { _, c -> FamilyLink.setGuardian("daughter", c) }
+        find<Switch>(R.id.elder_on).setOnCheckedChangeListener { _, c -> FamilyLink.senior = c; renderHome() }
+        find<Switch>(R.id.protect_on).setOnCheckedChangeListener { _, c -> FamilyLink.protect = c; renderHome() }
         find<EditText>(R.id.secret_q).addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(e: Editable?) { e?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { FamilyLink.secretQuestion = it } }
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -304,32 +322,56 @@ class MainActivity : AppCompatActivity() {
         })
         find<Button>(R.id.btn_sim_son).setOnClickListener {
             val svc = CallWatcherService.running
+            val target = FamilyLink.others().firstOrNull { it.online }
             when {
                 svc == null -> toast("Turn on the call watcher first")
                 !FamilyLink.connected -> toast("Connect to the family relay first")
-                else -> svc.simulateCall("son")
+                target == null -> toast("No other family phone is online")
+                else -> svc.simulateCall(target.id)
             }
         }
-        find<Button>(R.id.btn_change_role).setOnClickListener { askWhosePhone() }
+        find<Button>(R.id.btn_change_role).setOnClickListener { askWhoAmI() }
         find<Button>(R.id.btn_forget_keys).setOnClickListener {
             AlertDialog.Builder(this)
-                .setMessage("Forget Son's and Daughter's paired keys? Do this if one of them reinstalled the family app.")
+                .setMessage("Forget the family's paired keys? Do this if someone reinstalled the app or changed phone.")
                 .setPositiveButton("Forget") { _, _ -> FamilyLink.forgetPins() }
                 .setNegativeButton("Cancel", null).show()
         }
-        if (FamilyLink.enabled && !FamilyLink.connected) FamilyLink.start()
+        if (FamilyLink.enabled) FamilyService.start(this)   // the background service owns the connection on every phone
     }
 
     private fun renderFamily() {
-        val lines = mutableListOf(FamilyLink.status, "This phone (Mum): key ${DeviceKey.fingerprint}")
-        for ((role, name) in FamilyLink.MEMBERS) {
-            val online = if (FamilyLink.isOnline(role)) "🟢 online" else "⚪ offline"
-            val pin = FamilyLink.pinOf(role)?.let { "key $it" } ?: "not paired yet"
-            val warn = if (role in FamilyLink.keyMismatch) " ⚠️ KEY MISMATCH" else ""
-            val face = if (FaceStore.load(this).any { it.name.equals(name, true) }) "" else " · no face enrolled as \"$name\""
-            lines += "$name: $online · $pin$warn$face"
+        val me = FamilyLink.myRole
+        find<TextView>(R.id.me_line).text = if (me == null) "Not set up yet" else
+            "I'm ${FamilyLink.myName} (id \"$me\")${if (FamilyLink.senior) " · senior citizen" else ""}"
+        val faces = FaceStore.load(this)
+        val lines = mutableListOf(FamilyLink.status, "This phone: key ${DeviceKey.fingerprint}" +
+            if (faces.none { it.isOwner }) " · ⚠️ add YOUR face in section 2 (tick “This is me”) so the family's phones know you" else " · my face ✓")
+        for (m in FamilyLink.others()) {
+            val name = FamilyLink.nameOf(m.id)
+            val online = if (m.online) "🟢" else "⚪"
+            val pin = FamilyLink.pinOf(m.id)?.let { "key $it" } ?: "not paired yet"
+            val warn = if (m.id in FamilyLink.keyMismatch) " ⚠️ KEY MISMATCH" else ""
+            val face = when {
+                faces.any { it.memberId == m.id } -> " · face shared ✓"
+                faces.any { it.name.equals(name, true) } -> " · face enrolled here ✓"
+                else -> " · no face yet"
+            }
+            val extra = (if (m.senior) " · senior" else "") + (if (!m.v2 && m.online) " · older app" else "")
+            lines += "$online $name: $pin$warn$face$extra"
         }
+        if (FamilyLink.members.isEmpty()) lines += "No other family phones seen yet."
         find<TextView>(R.id.family_status).text = lines.joinToString("\n")
+        // my guardians: one checkbox per member
+        val box = find<LinearLayout>(R.id.guardians_box)
+        box.removeAllViews()
+        for (m in FamilyLink.others()) box.addView(CheckBox(this).apply {
+            text = FamilyLink.nameOf(m.id); isChecked = FamilyLink.isGuardian(m.id); setTextColor(0xFFC9D1D9.toInt())
+            setOnCheckedChangeListener { _, c -> FamilyLink.setGuardian(m.id, c) }
+        })
+        if (FamilyLink.members.isEmpty()) box.addView(TextView(this).apply { text = "(appear here when they connect)"; setTextColor(0xFF8B949E.toInt()) })
+        find<Button>(R.id.btn_sim_son).text = FamilyLink.others().firstOrNull { it.online }
+            ?.let { "Test: a call that looks like ${FamilyLink.nameOf(it.id)}" } ?: "Test: a call that looks like… (no one online)"
     }
 
     // ------------------------------------------------------------------ people
@@ -407,6 +449,7 @@ class MainActivity : AppCompatActivity() {
                     faces.isEmpty() -> "No face found in that photo. Try a clearer, front-facing one."
                     p is Pick.Enrol -> {
                         FaceStore.addSample(this, p.name, p.isOwner, faces.first().embedding)
+                        if (p.isOwner) main.post { FaceShare.sendMyFace() }
                         "Added a face sample for ${p.name}" + if (faces.size > 1) " (used the biggest face)" else ""
                     }
                     else -> {

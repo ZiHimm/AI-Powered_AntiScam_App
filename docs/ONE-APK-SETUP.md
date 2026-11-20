@@ -1,5 +1,9 @@
 # Setting up 3 phones with ONE app (AntiScam Guard)
 
+> **On branch `jason/step2` (everyone protected):** first launch asks for your **name** instead of a role. Use Mum / Son /
+> Daughter for the classic demo, or any names. Every phone: add **your own face** (📷, tick "This is me") and it's shared
+> with the family automatically. Tick "I'm a senior citizen" on the phone(s) whose guardians should get alerts.
+
 The same APK goes on all three phones; each phone picks its role on first launch.
 **Download:** https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk
 (rebuilt automatically after every change; check the date on the Releases page).

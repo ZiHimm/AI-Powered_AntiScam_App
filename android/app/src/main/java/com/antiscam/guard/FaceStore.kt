@@ -6,7 +6,8 @@ import org.json.JSONObject
 import kotlin.math.sqrt
 
 /** A family member (or the phone's owner) and their face embeddings. No photos are stored. */
-data class Person(val name: String, val isOwner: Boolean, val embeddings: MutableList<FloatArray>)
+/** memberId is set for faces another member shared from their own phone (step 2). */
+data class Person(val name: String, val isOwner: Boolean, val embeddings: MutableList<FloatArray>, val memberId: String? = null)
 
 data class Match(val person: Person?, val distance: Float)
 
@@ -33,7 +34,8 @@ object FaceStore {
                 MutableList(embs.length()) { j ->
                     val e = embs.getJSONArray(j)
                     FloatArray(e.length()) { k -> e.getDouble(k).toFloat() }
-                }
+                },
+                o.optString("member").takeIf { it.isNotEmpty() }
             )
         }
     }
@@ -44,6 +46,7 @@ object FaceStore {
             arr.put(JSONObject().apply {
                 put("name", p.name)
                 put("owner", p.isOwner)
+                p.memberId?.let { put("member", it) }
                 put("embeddings", JSONArray().apply {
                     p.embeddings.forEach { e -> put(JSONArray().apply { e.forEach { put(it.toDouble()) } }) }
                 })
@@ -57,6 +60,13 @@ object FaceStore {
         val p = people.find { it.name.equals(name, ignoreCase = true) }
             ?: Person(name, isOwner, mutableListOf()).also { people.add(it) }
         p.embeddings.add(embedding)
+        save(ctx, people)
+    }
+
+    /** Faces a member shared from their own phone replace that member's previously shared faces. */
+    fun setShared(ctx: Context, memberId: String, name: String, embeddings: List<FloatArray>) {
+        val people = load(ctx).filterNot { it.memberId == memberId }.toMutableList()
+        if (embeddings.isNotEmpty()) people.add(Person(name, false, embeddings.toMutableList(), memberId))
         save(ctx, people)
     }
 

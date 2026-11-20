@@ -64,15 +64,10 @@ class CallWatcherService : AccessibilityService() {
         engine = FaceEngine.get(this)
         overlay = WarningOverlay(this)
         FamilyLink.init(this)
-        if (FamilyLink.myRole != null && !FamilyLink.isMum) {
-            // Step 1 of the one-app plan: only Mum's phone checks calls; Son/Daughter use family mode (FamilyService)
-            LiveLog.add("This is ${FamilyLink.nameOf(FamilyLink.myRole!!)}'s phone (family mode): video calls are checked on Mum's phone.")
-            return
-        }
         family = FamilyCheck(overlay) { hangUpFromOverlay() }
-        FamilyLink.init(this)
-        FamilyLink.listener = family
-        FamilyLink.start()
+        FamilyLink.listeners.add(family)
+        MemberHub.init(this); FamilyLink.listeners.add(MemberHub)
+        if (FamilyLink.enabled && !FamilyLink.connected) FamilyLink.start()   // FamilyService normally owns it
         running = this
         Notifier.ensureChannels(this)
         LiveLog.serviceConnected = true
@@ -90,7 +85,7 @@ class CallWatcherService : AccessibilityService() {
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.hide()
-        if (::family.isInitialized) { family.end(quiet = true); if (FamilyLink.listener === family) FamilyLink.listener = null }
+        if (::family.isInitialized) { family.end(quiet = true); FamilyLink.listeners.remove(family) }
         if (running === this) running = null
         LiveLog.serviceConnected = false
         LiveLog.add("Call watcher off.")
@@ -105,7 +100,7 @@ class CallWatcherService : AccessibilityService() {
     }
 
     private fun step() {
-        if (FamilyLink.myRole != null && !FamilyLink.isMum) { if (activeApp != null) endCall(); return } // switched to family mode
+        if (!FamilyLink.protect) { if (activeApp != null) endCall(); return } // "check my calls" is off on this phone
         val root = rootInActiveWindow
         val pkg = root?.packageName?.toString()
         val inCall = audio.mode == AudioManager.MODE_IN_COMMUNICATION

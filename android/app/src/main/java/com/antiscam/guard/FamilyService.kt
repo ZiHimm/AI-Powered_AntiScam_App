@@ -12,10 +12,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 
 /**
- * Family mode only (Son's / Daughter's phone): keeps the relay connection alive while other apps (e.g. WhatsApp)
- * are in front, so "Are you calling Mum?" still pops up. Android would otherwise freeze the app in the background.
- * Same idea as Family Verify's RelayKeepAliveService. Mum's phone doesn't need this: its accessibility service
- * already keeps the app alive.
+ * Keeps every family phone's relay connection alive while other apps (e.g. WhatsApp) are in front, so questions
+ * ("Are you calling Dad?") and guardian alerts still pop up. Android would otherwise freeze the app in the background.
+ * Same idea as Family Verify's RelayKeepAliveService.
  */
 class FamilyService : Service() {
 
@@ -35,16 +34,16 @@ class FamilyService : Service() {
         FamilyLink.init(this); MemberHub.init(this); Notifier.ensureChannels(this)
         ServiceCompat.startForeground(this, Notifier.ID_KEEP, Notifier.keepAlive(this, "Connecting…"),
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0)
-        FamilyLink.listener = MemberHub
-        FamilyLink.start()
+        FamilyLink.listeners.add(MemberHub)
+        if (!FamilyLink.connected) FamilyLink.start()
         main.post(refresh)
     }
 
     /** Keep the ongoing notification's text in sync with the connection. */
     private val refresh = object : Runnable {
         override fun run() {
-            val t = if (FamilyLink.connected) "Connected · Mum ${if (FamilyLink.isOnline("mum")) "online" else "offline"}"
-                    else FamilyLink.status
+            val on = FamilyLink.members.values.count { it.online }
+            val t = if (FamilyLink.connected) "Connected · $on family phone${if (on == 1) "" else "s"} online" else FamilyLink.status
             if (t != lastText && Notifier.canPost(this@FamilyService)) {
                 lastText = t
                 try { NotificationManagerCompat.from(this@FamilyService).notify(Notifier.ID_KEEP, Notifier.keepAlive(this@FamilyService, t)) }
@@ -58,7 +57,7 @@ class FamilyService : Service() {
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
-        if (FamilyLink.listener === MemberHub) FamilyLink.listener = null
+        FamilyLink.listeners.remove(MemberHub)
         FamilyLink.stop()
         super.onDestroy()
     }

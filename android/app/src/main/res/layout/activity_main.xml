@@ -44,6 +44,14 @@
             android:textSize="15sp" />
 
         <Button
+            android:id="@+id/btn_inbox"
+            style="@style/Btn"
+            android:layout_width="match_parent"
+            android:layout_marginTop="12dp"
+            android:textSize="18sp"
+            android:text="📬 Family questions &amp; alerts" />
+
+        <Button
             android:id="@+id/btn_settings"
             style="@style/Btn"
             android:layout_gravity="center_horizontal"
@@ -103,7 +111,7 @@
         <TextView style="@style/Section" android:text="4 · Family phones" />
         <TextView
             style="@style/Body"
-            android:text="Connect to the family relay (cloud address, or the laptop) so the REAL Son or Daughter is asked “Are you calling Mum?” on their own phone. Enrol their faces here named exactly Son and Daughter." />
+            android:text="Connect to the family relay (cloud address, or the laptop). Same address on every family phone. When a caller looks like a family member, the REAL person is asked on their own phone. Add YOUR face in section 2 (tick “This is me”): it's shared with the family's phones, signed, no photo." />
 
         <EditText
             android:id="@+id/relay_addr"
@@ -122,9 +130,11 @@
             android:text="Connect to family relay" />
         <TextView android:id="@+id/family_status" style="@style/Body" android:textSize="13sp" />
 
-        <Switch android:id="@+id/elder_on" style="@style/Body" android:text="Elder Mode: also alert guardians" />
-        <CheckBox android:id="@+id/g_son" style="@style/Body" android:text="Son is a guardian" />
-        <CheckBox android:id="@+id/g_daughter" style="@style/Body" android:text="Daughter is a guardian" />
+        <TextView android:id="@+id/me_line" style="@style/Body" android:textSize="17sp" android:textStyle="bold" />
+        <Switch android:id="@+id/protect_on" style="@style/Body" android:text="Check my incoming video calls on this phone" />
+        <Switch android:id="@+id/elder_on" style="@style/Body" android:text="I'm a senior citizen: alert my guardians if a scammer targets me" />
+        <TextView style="@style/Body" android:text="My guardians (get alerts about my calls):" android:textColor="#8B949E" />
+        <LinearLayout android:id="@+id/guardians_box" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
 
         <EditText
             android:id="@+id/secret_q"
@@ -144,7 +154,7 @@
 
         <Button android:id="@+id/btn_sim_son" style="@style/Btn" android:text="Test: a call that looks like Son" />
         <Button android:id="@+id/btn_forget_keys" style="@style/Btn" android:text="Forget paired family keys" />
-        <Button android:id="@+id/btn_change_role" style="@style/Btn" android:text="Change whose phone this is" />
+        <Button android:id="@+id/btn_change_role" style="@style/Btn" android:text="Change my name / setup" />
 
         <!-- 4. Log -->
         <TextView style="@style/Section" android:text="Activity" />

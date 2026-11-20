@@ -1,6 +1,6 @@
 # One app for the whole family: design (draft for Brian + Ben to agree)
 
-**Author:** Jason · **Status:** proposal. Step 1 is being built now; Step 2 needs everyone's OK before code.
+**Author:** Jason · **Status:** Step 1 on `main`. **Step 2 built on branch `jason/step2`** (PR, not merged); QR join still to do.
 
 ## Why
 
@@ -33,7 +33,24 @@ AntiScam Guard as Mum sends `{kind:"ping", req, env}`: `env` = `req` signed with
   `verifyFrom(env, 'mum')` and use `JSON.parse(env.body)`; block on failure. Once both Mum apps sign, both member apps can
   reject unsigned questions.
 
-## Step 2: everyone protected (protocol v2, needs agreement)
+## Step 2: everyone protected (built on `jason/step2`, needs review)
+
+### What's built (and tested on two emulators + Family Verify)
+- **Who are you?** First launch asks for your **name** (Mum, Dad, Aisha, 陈…), "I'm a senior citizen", and "Check my
+  incoming video calls". The name becomes the member id (`Grandma Lim` → `grandma-lim`; non-Latin names get `m-<hash>`).
+  Classic names (Mum/Son/Daughter) keep the old ids, so **Family Verify still works** with them.
+- **Relay:** any member id `/^[a-z][a-z0-9-]{1,23}$/`, up to 8 per family (`4008 family full`); classic roles still listed.
+- **Profiles:** signed `{kind:"profile"}` with name, senior, guardians, protect; sent when a member comes online.
+- **Faces:** enrol your own face once (📷, "This is me"); it's sent signed to step-2 members
+  (`model:"mobilefacenet-192"`), stored under your member id. Never sent to Family Verify (different model).
+- **Every phone protects its owner** (if "check my calls" is on) and asks whoever the face matches:
+  "Are you calling **<owner>** right now?", signed. Guardian alerts only if the owner is a **senior**, to their chosen guardians.
+- **Every phone can be asked / be a guardian:** one inbox ("📬 Family questions & alerts"); each question/alert is checked
+  against the key of the member who sent it.
+- Tested: Dad (senior) ↔ Aisha both directions; faces shared both ways; SCAM + guardian alert; non-senior → no alerts;
+  secret-question fallback; classic Son with Family Verify's Mum/Daughter.
+
+### Original proposal (for reference)
 
 ### Members instead of fixed roles
 - A family room has **members** with a stable id (random 8 hex, made on the phone) and a display name.

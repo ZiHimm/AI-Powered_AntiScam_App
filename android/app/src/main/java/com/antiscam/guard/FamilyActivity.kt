@@ -30,7 +30,7 @@ import java.util.Locale
 
 /**
  * Family mode screen (Son's / Daughter's phone). Native counterpart of Family Verify's member screen:
- * "Are you calling Mum?" with Yes/No behind the fingerprint, and signed guardian alerts.
+ * "Are you calling <them>?" with Yes/No behind the fingerprint, and signed guardian alerts, for any family member.
  */
 class FamilyActivity : AppCompatActivity() {
 
@@ -48,7 +48,7 @@ class FamilyActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FamilyLink.init(this); MemberHub.init(this); Notifier.ensureChannels(this)
-        if (FamilyLink.isMum || FamilyLink.myRole == null) { startActivity(Intent(this, MainActivity::class.java)); finish(); return }
+        if (FamilyLink.myRole == null) { startActivity(Intent(this, MainActivity::class.java)); finish(); return }
         buildUi()
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != android.content.pm.PackageManager.PERMISSION_GRANTED) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -74,8 +74,8 @@ class FamilyActivity : AppCompatActivity() {
     private fun buildUi() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(20), px(20), px(20), px(20)) }
         val me = FamilyLink.nameOf(FamilyLink.myRole ?: "son")
-        root.addView(text("${if (FamilyLink.myRole == "daughter") "👩" else "👦"} $me's phone", 28f, 0xFFE6EDF3.toInt(), bold = true))
-        root.addView(text("AntiScam Guard · family mode", 15f, 0xFF8B949E.toInt()))
+        root.addView(text("📬 Family questions & alerts", 26f, 0xFFE6EDF3.toInt(), bold = true))
+        root.addView(text("$me's phone · AntiScam Guard", 15f, 0xFF8B949E.toInt()))
         status = text("", 17f, 0xFFE6EDF3.toInt(), top = 12)
         root.addView(status)
         fixButton = bigButton("", 0xFFF59E0B.toInt()) {}.apply { visibility = View.GONE }
@@ -88,7 +88,7 @@ class FamilyActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(20) })
 
         settings = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-        settings.addView(text("Relay address (same as Mum's phone)", 15f, 0xFFC9D1D9.toInt(), top = 8))
+        settings.addView(text("Relay address (same on every family phone)", 15f, 0xFFC9D1D9.toInt(), top = 8))
         val addr = EditText(this).apply {
             setText(FamilyLink.relay); hint = "https://…fly.dev/f/CODE or 192.168.1.104:8000"
             setTextColor(0xFFE6EDF3.toInt()); setHintTextColor(0xFF6E7681.toInt()); setSingleLine(); imeOptions = EditorInfo.IME_ACTION_DONE
@@ -108,14 +108,13 @@ class FamilyActivity : AppCompatActivity() {
         })
         settings.addView(Button(this).apply {
             text = "Forget paired family keys"; setOnClickListener {
-                AlertDialog.Builder(this@FamilyActivity).setMessage("Forget Mum's and the family's paired keys? Do this if Mum's phone was reinstalled or replaced.")
+                AlertDialog.Builder(this@FamilyActivity).setMessage("Forget the family's paired keys? Do this if a family phone was reinstalled or replaced.")
                     .setPositiveButton("Forget") { _, _ -> FamilyLink.forgetPins() }.setNegativeButton("Cancel", null).show()
             }
         })
         settings.addView(Button(this).apply {
-            text = "Change whose phone this is"; setOnClickListener {
-                FamilyService.stop(this@FamilyActivity); FamilyLink.enabled = false; FamilyLink.myRole = null
-                startActivity(Intent(this@FamilyActivity, MainActivity::class.java)); finish()
+            text = "Home & settings"; setOnClickListener {
+                startActivity(Intent(this@FamilyActivity, MainActivity::class.java))
             }
         })
         root.addView(settings)
@@ -123,19 +122,20 @@ class FamilyActivity : AppCompatActivity() {
     }
 
     private fun render() {
-        val mumOnline = FamilyLink.isOnline("mum")
+        val online = FamilyLink.members.values.filter { it.online }.map { it.name.ifBlank { FamilyLink.nameOf(it.id) } }
         status.text = when {
             !FamilyLink.enabled -> "⚪ Not connected. Open ⚙ Settings and enter the relay address."
             !FamilyLink.connected -> "🟠 ${FamilyLink.status}"
-            FamilyLink.keyMismatch.contains("mum") -> "⚠️ Mum's phone has a different key than before. Alerts are blocked until you tap ⚙ → Forget paired family keys."
-            mumOnline -> "🟢 Connected · Mum's phone is online" + if (MemberHub.guardian) " · you're one of her guardians" else ""
-            else -> "🟡 Connected · Mum's phone is offline"
+            FamilyLink.keyMismatch.isNotEmpty() -> "⚠️ ${FamilyLink.keyMismatch.joinToString { FamilyLink.nameOf(it) }}: different key than before. " +
+                "Their messages are blocked until you tap ⚙ → Forget paired family keys."
+            online.isNotEmpty() -> "🟢 Connected · online: ${online.joinToString(", ")}"
+            else -> "🟡 Connected · no other family phone online"
         }
         // the one thing that would stop questions/alerts from reaching this phone, with a one-tap fix
         val notifOk = Notifier.canPost(this)
         val batteryOk = getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: true
         when {
-            !notifOk -> fix("⚠️ Allow notifications, or Mum's questions can't pop up") {
+            !notifOk -> fix("⚠️ Allow notifications, or family questions can't pop up") {
                 if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 else startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
             }
@@ -146,7 +146,7 @@ class FamilyActivity : AppCompatActivity() {
             else -> fixButton.visibility = View.GONE
         }
         list.removeAllViews()
-        if (MemberHub.cards.isEmpty()) list.addView(text("Nothing yet. If someone who looks like you video-calls Mum, you'll be asked here.", 16f, 0xFF8B949E.toInt(), top = 8))
+        if (MemberHub.cards.isEmpty()) list.addView(text("Nothing yet. If someone who looks like you video-calls a family member, you'll be asked here.", 16f, 0xFF8B949E.toInt(), top = 8))
         for (c in MemberHub.cards.take(20)) list.addView(cardView(c))
     }
 
@@ -165,34 +165,34 @@ class FamilyActivity : AppCompatActivity() {
             MemberHub.Kind.PING -> {
                 val req = c.req!!
                 box.addView(text("🛡 AntiScam Guard · $time", 13f, muted))
-                box.addView(text("Are you calling Mum right now?", 24f, white, bold = true, top = 4))
+                box.addView(text("Are you calling ${c.calleeName} right now?", 24f, white, bold = true, top = 4))
                 when (c.pingState) {
                     MemberHub.PingState.OPEN, MemberHub.PingState.ANSWERING -> {
                         val left = ((req.optLong("expires") - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
-                        box.addView(text("Someone who looks like you is video-calling Mum. (${left}s to answer)", 17f, white, top = 6))
+                        box.addView(text("Someone who looks like you is video-calling ${c.calleeName}. (${left}s to answer)", 17f, white, top = 6))
                         if (c.pingState == MemberHub.PingState.OPEN) box.addView(row(
                             bigButton("Yes, it's me", 0xFF16A34A.toInt()) { confirmThen(c, "yes") },
                             bigButton("No, not me", 0xFFDC2626.toInt()) { confirmThen(c, "no") }))
                         else box.addView(text("🔒 Confirming…", 16f, muted, top = 8))
                         box.addView(text("🔒 Fingerprint required · request ${req.optString("nonce").take(8)}…", 13f, muted, top = 8))
-                        box.addView(text(if (c.unsigned) "⚠️ Not signed (older Mum app). Only answer if Mum really is on a call."
-                                         else "✔ Signed by Mum's phone", 13f, if (c.unsigned) 0xFFFBBF24.toInt() else 0xFF86EFAC.toInt(), top = 4))
+                        box.addView(text(if (c.unsigned) "⚠️ Not signed (older app). Only answer if ${c.calleeName} really is on a call."
+                                         else "✔ Signed by ${c.calleeName}'s phone", 13f, if (c.unsigned) 0xFFFBBF24.toInt() else 0xFF86EFAC.toInt(), top = 4))
                     }
                     MemberHub.PingState.ANSWERED -> box.addView(text(c.body, 17f, white, top = 6))
-                    MemberHub.PingState.EXPIRED -> box.addView(text("Expired. Mum was told you didn't reply.", 17f, muted, top = 6))
+                    MemberHub.PingState.EXPIRED -> box.addView(text("Expired. ${c.calleeName} was told you didn't reply.", 17f, muted, top = 6))
                     MemberHub.PingState.CANCELLED -> box.addView(text("The call ended before you replied.", 17f, muted, top = 6))
                 }
             }
             MemberHub.Kind.ALERT -> {
                 val urgent = c.alert?.optString("level") == "urgent"
-                box.addView(text(if (urgent) "🚨 AntiScam Guard · URGENT · $time" else "🛡 AntiScam Guard · Mum · $time", 13f, muted))
+                box.addView(text(if (urgent) "🚨 AntiScam Guard · URGENT · $time" else "🛡 AntiScam Guard · ${c.calleeName} · $time", 13f, muted))
                 box.addView(text(c.title, 21f, white, bold = true, top = 4))
                 if (c.body.isNotEmpty()) box.addView(text(c.body, 16f, white, top = 4))
                 if (urgent) box.addView(row(
-                    bigButton(if (c.called) "📞 Calling Mum…" else "📞 Call Mum now", 0xFF16A34A.toInt(), enabled = !c.called) { MemberHub.callMum(c) },
-                    bigButton(if (c.warned) "✓ Sent to Mum" else "⚠️ Tell Mum to hang up", 0xFFDC2626.toInt(), enabled = !c.warned) { MemberHub.warnMum(c) }))
+                    bigButton(if (c.called) "📞 Calling ${c.calleeName}…" else "📞 Call ${c.calleeName} now", 0xFF16A34A.toInt(), enabled = !c.called) { MemberHub.callCallee(c) },
+                    bigButton(if (c.warned) "✓ Sent to ${c.calleeName}" else "⚠️ Tell ${c.calleeName} to hang up", 0xFFDC2626.toInt(), enabled = !c.warned) { MemberHub.warnCallee(c) }))
                 c.shared.forEach { box.addView(text(it, 15f, white, top = 6)) }
-                box.addView(text("✔ Signed by Mum's phone · ${c.sig.take(8)}…", 13f, 0xFF86EFAC.toInt(), top = 8))
+                box.addView(text("✔ Signed by ${c.calleeName}'s phone · ${c.sig.take(8)}…", 13f, 0xFF86EFAC.toInt(), top = 8))
             }
             MemberHub.Kind.LOG -> box.addView(text("📝 ${c.title} · $time", 15f, muted))
             MemberHub.Kind.BLOCKED -> {
@@ -212,7 +212,7 @@ class FamilyActivity : AppCompatActivity() {
 
     private fun confirmThen(c: MemberHub.Card, answer: String) {
         c.pingState = MemberHub.PingState.ANSWERING; shown = -1
-        val reason = if (answer == "yes") "Confirm it is you calling Mum" else "Confirm it is NOT you"
+        val reason = if (answer == "yes") "Confirm it is you calling ${c.calleeName}" else "Confirm it is NOT you"
         val auth = if (Build.VERSION.SDK_INT >= 30) BIOMETRIC_WEAK or DEVICE_CREDENTIAL else BIOMETRIC_WEAK
         if (BiometricManager.from(this).canAuthenticate(auth) != BiometricManager.BIOMETRIC_SUCCESS) {
             // no fingerprint/PIN set up on this phone: confirm by tap instead (logged, so it's visible on the monitor)
