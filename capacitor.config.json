@@ -1,0 +1,9 @@
+{
+  "appId": "com.familyverify.demo",
+  "appName": "Family Verify",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

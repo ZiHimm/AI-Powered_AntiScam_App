@@ -1,5 +1,58 @@
 # Zero-Trust Video Verification · Hackathon Demo
 
+## 📱 Running on 3 real Android phones
+
+Each phone runs the same app, **Family Verify** (`FamilyVerify.apk`), and you choose on first launch whether it's **Mum**, **Son** or **Daughter**.
+The phones talk to each other through a small relay running on a laptop. Everything stays on the local network,
+so no internet is needed (a phone hotspot works fine).
+
+```
+ Mum's phone ──┐                     ┌── Son's phone
+               ├──  laptop relay  ───┤
+               │  (node, port 8787)  └── Daughter's phone
+```
+
+**1. Start the relay on the laptop**
+
+```bash
+node relay/server.js
+```
+
+It prints the address the phones should use, e.g. `http://192.168.43.120:8787`. The laptop and all three phones must be on the
+**same Wi-Fi or hotspot**. If Windows asks whether to allow Node.js on the network, allow it on **Private** networks.
+
+**2. Install the app on each phone**
+
+Copy `FamilyVerify.apk` to each phone (USB, Google Drive, WhatsApp to yourself…), tap it, and allow
+"Install unknown apps" when Android asks. With USB debugging on, you can instead run
+`adb install -r FamilyVerify.apk`.
+
+**3. First launch on each phone**
+
+Type the relay address, then tap **Mum**, **Son** or **Daughter**. The top bar turns green (**Connected**) once the relay sees the phone.
+Mum's phone asks for camera permission on the first call or enrolment, so tap **Allow**.
+To change a phone's role later, tap the **📱 role button** at the top right.
+
+**4. Set up on Mum's phone** (tap **⚙ Controls**)
+
+- **Enrol family faces:** tap **Webcam** next to Son (with Son looking at Mum's phone) or pick a **Photo**.
+- **Mum's camera:** use **Back camera** to point Mum's phone at the "caller" (a teammate or a laptop playing a deepfake video).
+- **Incoming call** starts the demo. The controls close so the judges see Mum's screen.
+
+The demo script below is the same, except Son and Daughter tap the buttons on **their own phones**.
+
+**Rebuilding the APK** (needs JDK 21 and the Android SDK; see `android/local.properties`):
+
+```bash
+npm install
+npm run apk        # → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Testing without phones:** run the relay and open `http://localhost:8787/?role=mum`, `?role=son` and `?role=daughter` in three browser tabs.
+Opening `http://localhost:8787/` and picking **All three phones on this screen** gives the original one-screen demo.
+
+---
+
 Browser demo with three phones on one page: **Mum** (receiver), **Son** (member/guardian) and **Daughter** (guardian).
 The face detection and matching are real and run in the browser with face-api.js. The push network between phones is
 simulated, but the nonces and ECDSA P-256 signatures are real (WebCrypto), so forged and replayed alerts genuinely fail.

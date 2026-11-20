@@ -27,8 +27,20 @@ const nm = (id) => MEMBERS[id].name;
 const PUSH_LATENCY = 450; // ms, simulated network delay
 const MODEL_URL = 'vendor/models';
 
+// ---------------------------------------------------------------- which phone is this?
+// ROLE 'all' = the original one-screen demo (network simulated with timeouts).
+// ROLE 'mum' | 'son' | 'daughter' = one real phone; messages travel through the relay (relay/server.js).
+const ROLE_KEY = 'ztvv-role-v1';
+const RELAY_KEY = 'ztvv-relay-v1';
+const qs = new URLSearchParams(location.search);
+const ROLE = qs.get('role') || localStorage.getItem(ROLE_KEY) || '';
+const RELAY = (qs.get('relay') || localStorage.getItem(RELAY_KEY) || (location.port === '8787' ? location.origin : '')).replace(/\/+$/, '');
+const NET = ROLE === 'mum' || ROLE === 'son' || ROLE === 'daughter';
+const IS_MUM = ROLE === 'mum' || ROLE === 'all';
+const who = (id) => (id === 'mum' ? 'Mum' : nm(id));
+
 // ---------------------------------------------------------------- persistent settings (this device only)
-const STORE_KEY = 'ztvv-demo-v1';
+const STORE_KEY = ROLE === 'son' || ROLE === 'daughter' ? `ztvv-demo-v1-${ROLE}` : 'ztvv-demo-v1';
 const defaults = () => ({
   descriptors: { son: [], daughter: [] }, // 128-d face embeddings only, never images
   guardians: { son: true, daughter: true },
@@ -42,6 +54,7 @@ const defaults = () => ({
   blurThreshold: 40,
   showDebug: true,
   notifyOnBlur: false,
+  facing: 'user', // Mum's camera: 'user' (front) or 'environment' (back)
 });
 let store = loadStore();
 function loadStore() {
@@ -78,15 +91,26 @@ const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const ECDSA = { name: 'ECDSA', hash: 'SHA-256' };
 
+async function fingerprint(publicKey) {
+  const raw = await crypto.subtle.exportKey('raw', publicKey);
+  const h = await crypto.subtle.digest('SHA-256', raw);
+  return [...new Uint8Array(h)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join(':');
+}
 async function initKeys() {
   const gen = () => crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  [keys.mum, keys.son, keys.daughter, keys.attacker] = await Promise.all([gen(), gen(), gen(), gen()]);
-  const fp = async (k) => {
-    const raw = await crypto.subtle.exportKey('raw', k.publicKey);
-    const h = await crypto.subtle.digest('SHA-256', raw);
-    return [...new Uint8Array(h)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join(':');
-  };
-  $('#key-info').innerHTML = `Device keys (ECDSA P-256, made at setup):<br>Mum ${code(await fp(keys.mum))}<br>Son ${code(await fp(keys.son))}<br>Daughter ${code(await fp(keys.daughter))}`;
+  if (NET) {
+    // this phone only makes its own key pair; the others arrive in 'hello' messages
+    keys[ROLE] = await gen();
+    if (ROLE === 'mum') keys.attacker = await gen();
+    myJwk = await crypto.subtle.exportKey('jwk', keys[ROLE].publicKey);
+  } else {
+    [keys.mum, keys.son, keys.daughter, keys.attacker] = await Promise.all([gen(), gen(), gen(), gen()]);
+  }
+  await renderKeyInfo();
+}
+async function renderKeyInfo() {
+  const rows = await Promise.all(['mum', ...IDS].filter((id) => keys[id]).map(async (id) => `${who(id)} ${code(await fingerprint(keys[id].publicKey))}`));
+  $('#key-info').innerHTML = `Device keys (ECDSA P-256, made at setup):<br>${rows.join('<br>')}`;
 }
 async function sign(payload, keyPair) {
   const body = JSON.stringify(payload);
@@ -97,15 +121,71 @@ async function verify(env, publicKey) {
   try { return await crypto.subtle.verify(ECDSA, publicKey, unb64(env.sig), enc.encode(env.body)); } catch { return false; }
 }
 
-// ---------------------------------------------------------------- simulated push network
-function deliver(to, fn, label = 'message') {
-  if (to !== 'mum' && !rt.online[to]) {
+// ---------------------------------------------------------------- push network
+function send(to, msg, label = 'message') {
+  if (IDS.includes(to) && !rt.online[to]) {
     log('warn', `✗ ${nm(to)}'s phone is offline. ${label} not delivered`);
     return false;
   }
-  const epoch = rt.epoch; // messages in flight are dropped if the demo is reset
-  setTimeout(() => { if (epoch === rt.epoch) fn(); }, PUSH_LATENCY);
+  const m = { from: ROLE, ...msg, to };
+  if (!NET) {
+    const epoch = rt.epoch; // messages in flight are dropped if the demo is reset
+    setTimeout(() => { if (epoch === rt.epoch) onMessage(m); }, PUSH_LATENCY);
+    return true;
+  }
+  fetch(`${RELAY}/send`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(m) })
+    .then((r) => r.json())
+    .then((r) => { if (!r.delivered && to !== 'all') log('warn', `✗ ${label}: ${who(to)}'s phone isn't connected right now`); })
+    .catch((e) => log('warn', `✗ Can't reach the relay (${esc(e.message)})`));
   return true;
+}
+
+// public keys of the other phones, exchanged when each phone joins (relay replays them to late joiners)
+let myJwk = null;
+const sendHello = () => send('all', { t: 'hello', role: ROLE, jwk: myJwk });
+async function onHello(m) {
+  if (!m.jwk || m.role === ROLE) return;
+  const publicKey = await crypto.subtle.importKey('jwk', m.jwk, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']);
+  keys[m.role] = { publicKey };
+  log('sec', `Got ${who(m.role)}'s public key ${code(await fingerprint(publicKey))}`);
+  renderKeyInfo();
+  if (ROLE === 'mum' && m.role !== 'mum') pushSettings(m.role);
+}
+
+function connectRelay() {
+  const pill = $('#net-status');
+  const es = new EventSource(`${RELAY}/events?role=${ROLE}`);
+  es.onopen = () => { pill.className = 'pill pill-ok'; pill.textContent = 'Connected'; sendHello(); };
+  es.onerror = () => { pill.className = 'pill pill-err'; pill.textContent = 'Reconnecting…'; };
+  es.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } onMessage(m); };
+}
+
+// Mum tells the family phones their role (Guardian / Member) and mode
+function pushSettings(to) {
+  if (ROLE !== 'mum') return;
+  const s = { guardians: store.guardians, primary: store.primary, elderMode: store.elderMode };
+  (to ? [to] : IDS).forEach((id) => send(id, { t: 'settings', s }, 'Settings'));
+}
+
+// every message between phones lands here
+async function onMessage(m) {
+  const p = phones[m.to];
+  switch (m.t) {
+    case 'hello': return onHello(m);
+    // Mum → family phone
+    case 'ping': return p?.showPing(m.req);
+    case 'expire': return p?.expirePing(m.nonce);
+    case 'cancel': return p?.cancelPing(m.nonce);
+    case 'alert': return p?.receiveAlert(m.env);
+    case 'reset': return p?.clear();
+    case 'settings': Object.assign(store, m.s); save(); return IDS.forEach((id) => phones[id].renderRole());
+    // family phone → family phone
+    case 'shared': applyShared(m.callId, m.text); return p?.refreshShared(m.callId);
+    // family phone → Mum
+    case 'reply': return IS_MUM && receiveReply(m.from, m.env);
+    case 'gcall': return IS_MUM && onGuardianCall(m.from);
+    case 'gwarn': return IS_MUM && onGuardianWarn(m.from, m.env);
+  }
 }
 
 // ---------------------------------------------------------------- face models + camera
@@ -134,7 +214,7 @@ async function loadModels() {
     await faceapi.detectSingleFace(c, tinyOpts()).withFaceLandmarks().withFaceDescriptor();
     rt.modelsReady = true;
     pill.className = 'pill pill-ok';
-    pill.textContent = `Face models ready (${faceapi.tf.getBackend()})`;
+    pill.textContent = NET ? 'Face AI ready' : `Face models ready (${faceapi.tf.getBackend()})`;
     log('face', 'Face detection + recognition models loaded locally. Nothing is sent to a server.');
   } catch (e) {
     console.error(e);
@@ -146,7 +226,7 @@ async function loadModels() {
 
 async function ensureCamera() {
   if (rt.stream) return rt.stream;
-  rt.stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false });
+  rt.stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: store.facing }, audio: false });
   return rt.stream;
 }
 async function attachCamera(videoEl) {
@@ -282,6 +362,7 @@ const callerIdText = () => (store.callerId === 'spoofed'
 
 async function startCall() {
   if (call.active) return;
+  if (NET) { $('.layout').classList.add('no-panel'); panelButtonText(); } // show Mum's screen
   $('#mum-ended').hidden = true;
   Object.assign(call, {
     active: true, id: randHex(4), status: 'scanning', answered: false, startedAt: now(),
@@ -375,7 +456,7 @@ function startVerification(id, obs) {
   call.req = req;
   log('face', `Face matches enrolled <b>${nm(id)}</b>${obs.forced ? ' [forced]' : ` (distance ${obs.distance.toFixed(2)} &lt; ${store.matchThreshold.toFixed(2)})`}. A deepfake would match too, so now we ask the real ${nm(id)}.`);
   log('push', `Mum → ${nm(id)}'s phone: ${code({ nonce: req.nonce, prompt: req.prompt, expires: `${store.replyTimeout}s` })}. No video, audio or location.`);
-  deliver(id, () => phones[id].showPing(req), 'Verification request');
+  send(id, { t: 'ping', req: { ...req, elder: store.elderMode } }, 'Verification request');
 
   call.timer = setTimeout(() => onReply(id, req.nonce, 'timeout'), store.replyTimeout * 1000);
   call.cdTimer = setInterval(updateCountdown, 250);
@@ -391,6 +472,7 @@ function startVerification(id, obs) {
 
 // signed reply arriving from a family phone
 async function receiveReply(from, env) {
+  if (!keys[from]) { log('warn', `Reply from ${who(from)} ignored: no public key for that phone yet`); return; }
   if (!(await verify(env, keys[from].publicKey))) {
     log('attack', `✗ Mum's phone rejected a reply claiming to be from ${nm(from)}: bad signature`);
     return;
@@ -428,7 +510,7 @@ function onReply(id, nonce, answer) {
   } else {
     call.status = 'C';
     call.secretOpen = true;
-    phones[id].expirePing(nonce);
+    send(id, { t: 'expire', nonce }, 'Expiry notice');
     log('info', `🟠 State C: no reply from ${who} in ${store.replyTimeout}s. Can't verify.`);
     if (store.elderMode) {
       alertGuardians({
@@ -468,7 +550,7 @@ function endCall(reason = 'Call ended') {
   callGen++;
   clearTimeout(call.timer);
   clearInterval(call.cdTimer);
-  if (call.req) IDS.forEach((id) => phones[id].cancelPing(call.req.nonce));
+  if (call.req) send(call.target, { t: 'cancel', nonce: call.req.nonce }, 'Cancel notice');
   call.req = null;
   call.status = 'idle';
   log('info', `📴 ${esc(reason)}`);
@@ -498,7 +580,7 @@ async function alertGuardians({ level, title, body = '', about = null }) {
   call.notified = [...new Set([...call.notified, ...to])];
   const label = { urgent: '🚨 URGENT alert', info: 'Heads-up', log: 'Silent log' }[level];
   log('sec', `${label} signed by Mum's device → ${to.map(nm).join(' + ')} at the same time ${code({ level, nonce: payload.nonce, sig: env.sig.slice(0, 18) + '…' })}`);
-  for (const g of to) deliver(g, () => phones[g].receiveAlert(env), label);
+  for (const g of to) send(g, { t: 'alert', env }, label);
   if (level === 'urgent') renderMum();
 }
 
@@ -510,46 +592,61 @@ async function sendForgedAlert() {
   };
   const env = await sign(payload, keys.attacker); // scammer doesn't have Mum's private key
   log('attack', '😈 Scammer sends a fake "Mum is in trouble" alert to the guardians, signed with their own key.');
-  IDS.filter((g) => store.guardians[g]).forEach((g) => deliver(g, () => phones[g].receiveAlert(env), 'Forged alert'));
+  IDS.filter((g) => store.guardians[g]).forEach((g) => send(g, { t: 'alert', env }, 'Forged alert'));
 }
 function replayAlert() {
   if (!lastAlertEnv) { log('warn', 'No urgent alert has been sent yet. Run the "Son taps No" scenario first.'); return; }
   log('attack', '😈 Scammer re-sends a real alert they captured earlier (replay attack).');
-  IDS.filter((g) => store.guardians[g]).forEach((g) => deliver(g, () => phones[g].receiveAlert(lastAlertEnv), 'Replayed alert'));
+  IDS.filter((g) => store.guardians[g]).forEach((g) => send(g, { t: 'alert', env: lastAlertEnv }, 'Replayed alert'));
 }
 
-// guardian actions
+// guardian actions (run on the guardian's phone)
 const callShared = new Map(); // callId -> [text]
-function addShared(callId, text, except) {
+function applyShared(callId, text) {
   if (!callShared.has(callId)) callShared.set(callId, []);
   callShared.get(callId).push(text);
-  IDS.filter((g) => g !== except).forEach((g) => phones[g].refreshShared(callId));
+}
+function addShared(callId, text, except) {
+  applyShared(callId, text);
+  for (const g of IDS.filter((x) => x !== except)) {
+    if (NET) send(g, { t: 'shared', callId, text }, 'Guardian update');
+    else phones[g].refreshShared(callId);
+  }
 }
 function guardianCallsMum(gid, callId) {
   log('push', `${nm(gid)} → Mum: incoming voice call`);
   addShared(callId, `${MEMBERS[gid].emoji} ${nm(gid)} is calling Mum now`, gid);
-  setTimeout(() => showMumToast(
-    `📞 ${nm(gid)} is calling you`,
-    call.active ? 'Your family is calling. Switch to them?' : '',
-    call.active ? [{ label: `Talk to ${nm(gid)}`, cls: 'b-green', act: () => endCall(`Mum hung up and switched to ${nm(gid)}'s call`) }] : [],
-  ), PUSH_LATENCY);
+  send('mum', { t: 'gcall', from: gid, callId }, 'Call');
 }
-async function guardianWarnsMum(gid, callId) {
-  const isImpersonated = gid === call.target;
-  const text = isImpersonated ? 'Hang up. This isn\'t me.' : 'This is a scam. Hang up now.';
+async function guardianWarnsMum(gid, callId, about) {
+  const text = gid === about ? 'Hang up. This isn\'t me.' : 'This is a scam. Hang up now.';
   const env = await sign({ type: 'guardian-warning', from: gid, callId, text, ts: now(), nonce: randHex(12) }, keys[gid]);
   log('push', `${nm(gid)} → Mum's screen: ${code({ text, sig: env.sig.slice(0, 14) + '…' })}`);
   addShared(callId, `${MEMBERS[gid].emoji} ${nm(gid)} told Mum to hang up`, gid);
-  setTimeout(async () => {
-    if (!(await verify(env, keys[gid].publicKey))) return;
-    log('sec', `Mum's phone: ✓ warning signed by ${nm(gid)}'s device`);
-    if (!call.active || call.id !== callId) return;
-    call.status = 'warned';
-    call.warn = { from: gid, text };
-    clearTimeout(call.timer);
-    clearInterval(call.cdTimer);
-    renderMum();
-  }, PUSH_LATENCY);
+  send('mum', { t: 'gwarn', from: gid, env }, 'Warning');
+}
+
+// ...and their effect on Mum's phone
+function onGuardianCall(gid) {
+  showMumToast(
+    `📞 ${nm(gid)} is calling you`,
+    call.active ? 'Your family is calling. Switch to them?' : '',
+    call.active ? [{ label: `Talk to ${nm(gid)}`, cls: 'b-green', act: () => endCall(`Mum hung up and switched to ${nm(gid)}'s call`) }] : [],
+  );
+}
+async function onGuardianWarn(gid, env) {
+  if (!keys[gid] || !(await verify(env, keys[gid].publicKey))) {
+    log('attack', `✗ Mum's phone rejected a warning claiming to be from ${nm(gid)}: bad signature`);
+    return;
+  }
+  const p = JSON.parse(env.body);
+  log('sec', `Mum's phone: ✓ warning signed by ${nm(gid)}'s device`);
+  if (!call.active || call.id !== p.callId) return;
+  call.status = 'warned';
+  call.warn = { from: gid, text: p.text };
+  clearTimeout(call.timer);
+  clearInterval(call.cdTimer);
+  renderMum();
 }
 
 // ---------------------------------------------------------------- Mum rendering
@@ -729,6 +826,7 @@ class MemberPhone {
     this.el = $(`#phone-${id}`);
     this.list = $('.notifs', this.el);
     this.seenNonces = new Set();
+    this.closed = new Set();  // request nonces Mum has expired or cancelled
     this.pings = new Map();   // nonce -> card
     this.alerts = new Map();  // callId -> card
   }
@@ -766,7 +864,9 @@ class MemberPhone {
     this.add(el);
     this.buzz();
     log('push', `${this.name}'s phone received the verification request`);
+    if (this.isClosed(req)) this.expirePing(req.nonce); // arrived after timeout/end
   }
+  isClosed(req) { return this.closed.has(req.nonce) || now() > req.expires; }
 
   async answer(req, answer, el) {
     $$('button', el).forEach((b) => { b.disabled = true; });
@@ -785,16 +885,20 @@ class MemberPhone {
 
     const env = await sign({ type: 'verify-reply', nonce: req.nonce, answer, from: this.id, ts: now() }, keys[this.id]);
     log('push', `${this.name}'s phone → Mum: ${code({ nonce: req.nonce.slice(0, 8) + '…', answer, sig: env.sig.slice(0, 14) + '…' })}`);
-    el.className = `card ${answer === 'yes' ? 'done-green' : 'done-red'}`;
-    $('.acts', el).remove();
+    const late = this.isClosed(req);
+    el.className = `card ${late ? 'muted' : answer === 'yes' ? 'done-green' : 'done-red'}`;
+    $('.acts', el)?.remove();
     $('.countdown', el)?.remove();
-    $('.d', el).innerHTML = answer === 'yes'
+    $('.d', el).innerHTML = late
+      ? 'Too late: this request had already expired. Mum still sees a warning.'
+      : answer === 'yes'
       ? '✓ You confirmed. Mum\'s screen shows green.'
-      : `✓ Mum has been warned to hang up.${store.elderMode ? ' Her guardians were alerted.' : ''}`;
-    deliver('mum', () => receiveReply(this.id, env));
+      : `✓ Mum has been warned to hang up.${req.elder ? ' Her guardians were alerted.' : ''}`;
+    send('mum', { t: 'reply', from: this.id, env }, 'Reply');
   }
 
   expirePing(nonce) {
+    this.closed.add(nonce);
     const el = this.pings.get(nonce);
     if (!el || !$('.acts', el)) return;
     el.classList.add('muted');
@@ -803,6 +907,7 @@ class MemberPhone {
     $('.d', el).textContent = 'Expired. Mum was told you didn\'t reply.';
   }
   cancelPing(nonce) {
+    this.closed.add(nonce);
     const el = this.pings.get(nonce);
     if (!el || !$('.acts', el)) return;
     el.classList.add('muted');
@@ -815,6 +920,7 @@ class MemberPhone {
     let p;
     try { p = JSON.parse(env.body); } catch { p = { title: '(unreadable)' }; }
     // 1) signature must come from Mum's device key (exchanged at setup)
+    if (!keys.mum) { log('warn', `${this.name}'s phone: alert ignored, Mum's public key hasn't arrived yet`); return; }
     if (!(await verify(env, keys.mum.publicKey))) {
       log('sec', `${this.name}'s phone: ✗ signature check FAILED. Fake alert blocked.`);
       this.add(this.card('rejected', `<div class="app"><span>🛡 Family Verify</span><span>blocked</span></div>
@@ -863,7 +969,7 @@ class MemberPhone {
       });
       $('[data-a=warn]', el).addEventListener('click', (e) => {
         e.target.disabled = true; e.target.textContent = '✓ Sent to Mum';
-        guardianWarnsMum(this.id, p.callId);
+        guardianWarnsMum(this.id, p.callId, p.about);
       });
     }
     if (old) old.replaceWith(el); else this.add(el);
@@ -881,7 +987,7 @@ class MemberPhone {
   }
 
   setOnline(on) { $('.offline-mask', this.el).hidden = on; }
-  clear() { this.list.innerHTML = ''; this.pings.clear(); this.alerts.clear(); }
+  clear() { this.list.innerHTML = ''; this.pings.clear(); this.alerts.clear(); this.closed.clear(); }
   renderRole() {
     const g = store.guardians[this.id];
     $(`.role[data-role=${this.id}]`).textContent = g ? `Guardian${store.primary === this.id ? ' ★ primary' : ''}` : 'Member';
@@ -917,11 +1023,13 @@ function syncSettingsUI() {
   $('#blur-th').value = store.blurThreshold;
   $('#blur-val').textContent = store.blurThreshold;
   $('#show-debug').checked = store.showDebug;
+  $('#facing-sel').value = store.facing;
+  $('#phone-mum').classList.toggle('back-cam', store.facing === 'environment');
   IDS.forEach((id) => phones[id].renderRole());
   renderEnrol();
   renderMum();
 }
-function setStore(patch) { Object.assign(store, patch); save(); syncSettingsUI(); }
+function setStore(patch) { Object.assign(store, patch); save(); syncSettingsUI(); pushSettings(); }
 
 function wire() {
   // enrolment
@@ -955,6 +1063,11 @@ function wire() {
   $('#match-th').addEventListener('input', (e) => setStore({ matchThreshold: +e.target.value }));
   $('#blur-th').addEventListener('input', (e) => setStore({ blurThreshold: +e.target.value }));
   $('#show-debug').addEventListener('change', (e) => setStore({ showDebug: e.target.checked }));
+  $('#facing-sel').addEventListener('change', (e) => {
+    setStore({ facing: e.target.value });
+    if (rt.stream && !call.active && !rt.enrolling) stopCameraIfIdle();
+    else if (rt.stream) log('info', 'Camera change applies to the next call.');
+  });
 
   // demo controls
   $('#btn-call').addEventListener('click', startCall);
@@ -985,9 +1098,14 @@ function wire() {
     syncSettingsUI();
     log('info', 'All faces and settings deleted from this device.');
   });
-  $('#btn-toggle-panel').addEventListener('click', (e) => {
-    const hidden = $('.layout').classList.toggle('no-panel');
-    e.target.textContent = hidden ? 'Show controls' : 'Hide controls';
+  $('#btn-toggle-panel').addEventListener('click', () => {
+    $('.layout').classList.toggle('no-panel');
+    panelButtonText();
+  });
+  $('#btn-role').addEventListener('click', () => {
+    if (!confirm('Choose a different role for this phone?')) return;
+    localStorage.removeItem(ROLE_KEY);
+    location.href = location.pathname;
   });
 
   // Mum's screen buttons
@@ -1004,7 +1122,7 @@ function wire() {
 
   // keyboard shortcuts for the presenter
   document.addEventListener('keydown', (e) => {
-    if (e.target.matches('input, select, textarea')) return;
+    if (!IS_MUM || e.target.matches('input, select, textarea')) return;
     if (e.key === 'c') startCall();
     if (e.key === 'e') endCall('Call ended (keyboard)');
     if (e.key === 'r') resetDemo();
@@ -1019,6 +1137,7 @@ function resetDemo() {
     rt.online[id] = true;
     $(`#online-${id}`).checked = true;
     phones[id].setOnline(true);
+    if (NET) send(id, { t: 'reset' }, 'Reset');
   });
   rt.force = 'auto';
   $('input[name=force][value=auto]').checked = true;
@@ -1027,8 +1146,42 @@ function resetDemo() {
   logSep('Demo reset');
 }
 
+// ---------------------------------------------------------------- role picker
+function panelButtonText() {
+  const hidden = $('.layout').classList.contains('no-panel');
+  $('#btn-toggle-panel').textContent = NET ? (hidden ? '⚙ Controls' : '✕ Close') : (hidden ? 'Show controls' : 'Hide controls');
+}
+function showRolePicker(msg = '') {
+  document.body.classList.add('picking');
+  $('#role-picker').hidden = false;
+  $('#relay-input').value = RELAY;
+  $('#picker-msg').textContent = msg;
+  $$('#role-picker [data-role]').forEach((b) => b.addEventListener('click', () => {
+    const role = b.dataset.role;
+    const relay = $('#relay-input').value.trim().replace(/\/+$/, '');
+    if (role !== 'all' && !/^https?:\/\/[^/]+$/.test(relay)) {
+      $('#picker-msg').textContent = 'Enter the relay address shown on the laptop, e.g. http://192.168.1.20:8787';
+      return;
+    }
+    localStorage.setItem(ROLE_KEY, role);
+    if (relay) localStorage.setItem(RELAY_KEY, relay);
+    location.href = location.pathname;
+  }));
+}
+
 // ---------------------------------------------------------------- boot
 (async function boot() {
+  if (!ROLE) return showRolePicker();
+  if (NET && !RELAY) return showRolePicker('Enter the relay address first.');
+  document.body.classList.add(`role-${ROLE}`);
+  if (NET) {
+    document.body.classList.add('solo');
+    $(`#phone-${ROLE}`).closest('.phone-col').classList.add('me');
+    $('.layout').classList.add('no-panel');
+    $('#net-status').hidden = false;
+    $('#btn-role').textContent = `📱 ${who(ROLE)}`;
+  }
+  panelButtonText();
   wire();
   tickClocks();
   setInterval(tickClocks, 10000);
@@ -1038,6 +1191,9 @@ function resetDemo() {
     return;
   }
   await initKeys();
-  log('sec', 'Each device made its own ECDSA P-256 key pair. Public keys were exchanged when the family circle was set up.');
-  loadModels();
+  log('sec', NET
+    ? `This phone (${who(ROLE)}) made its own ECDSA P-256 key pair. Only the public key is shared.`
+    : 'Each device made its own ECDSA P-256 key pair. Public keys were exchanged when the family circle was set up.');
+  if (NET) connectRelay();
+  if (IS_MUM) loadModels();
 })();

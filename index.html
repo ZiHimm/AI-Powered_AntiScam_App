@@ -17,10 +17,31 @@
     </div>
   </div>
   <div class="topbar-right">
+    <span id="net-status" class="pill pill-wait" hidden>Connecting…</span>
     <span id="model-status" class="pill pill-wait">Loading face models…</span>
     <button id="btn-toggle-panel" class="btn ghost small">Hide controls</button>
+    <button id="btn-role" class="btn ghost small" title="Choose which phone this is">📱</button>
   </div>
 </header>
+
+<!-- ============ WHICH PHONE IS THIS? ============ -->
+<div id="role-picker" class="picker" hidden>
+  <div class="picker-box">
+    <div class="picker-logo">🛡</div>
+    <h2>Family Verify</h2>
+    <p>Which phone is this?</p>
+    <label class="field">Relay address <small>(the laptop running <code>relay/server.js</code>)</small>
+      <input type="text" id="relay-input" inputmode="url" placeholder="http://192.168.1.20:8787">
+    </label>
+    <div class="picker-btns">
+      <button class="pick" data-role="mum" data-icon="👵"><b>Mum</b><small>Receives the call</small></button>
+      <button class="pick" data-role="son" data-icon="👦"><b>Son</b><small>Family member</small></button>
+      <button class="pick" data-role="daughter" data-icon="👩"><b>Daughter</b><small>Family member</small></button>
+    </div>
+    <button class="btn ghost small" data-role="all">🖥 All three phones on this screen</button>
+    <div id="picker-msg" class="picker-msg"></div>
+  </div>
+</div>
 
 <main class="layout">
   <!-- ============ SETUP + DEMO CONTROLS ============ -->
@@ -81,6 +102,12 @@
         </select>
       </label>
       <label class="check"><input type="checkbox" id="notify-blur"> Elder Mode: tell guardians about blurry calls too</label>
+      <label class="field">Mum's camera
+        <select id="facing-sel">
+          <option value="user">Front (selfie) camera</option>
+          <option value="environment">Back camera (point it at the caller)</option>
+        </select>
+      </label>
     </section>
 
     <section class="box demo">

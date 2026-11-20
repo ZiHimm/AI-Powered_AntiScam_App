@@ -16,7 +16,7 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; background: var(--bg); color: var(--text);
+html, body { margin: 0; -webkit-tap-highlight-color: transparent; background: var(--bg); color: var(--text);
   font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 small { color: var(--muted); font-weight: 400; }
 code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: #0b0f14; border: 1px solid var(--line);
@@ -99,7 +99,7 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .statusbar { position: absolute; top: 0; left: 0; right: 0; height: 34px; padding: 8px 22px 0; display: flex;
   justify-content: space-between; font-size: 11.5px; font-weight: 600; color: #fff; z-index: 40; pointer-events: none; }
 .screen { position: absolute; inset: 0; overflow: hidden;
-  background: linear-gradient(160deg, #1e3a8a, #312e81 55%, #4c1d95); }
+  background: linear-gradient(170deg, #1b2b4a, #12203a 55%, #0c1628); }
 .phone.shake { animation: shake .5s 2; }
 .phone.urgent-ring { box-shadow: 0 0 0 4px var(--red), 0 0 40px var(--red); }
 @keyframes shake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-6px) rotate(-1deg) }
@@ -175,7 +175,8 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .fullscreen .who { font-size: 13.5px; background: #0003; border-radius: 999px; padding: 4px 12px; }
 .fullscreen .acts { display: flex; flex-direction: column; gap: 10px; width: 100%; }
 .fullscreen button { font-size: 20px; padding: 11px; border-radius: 16px; }
-.fullscreen .b-red { background: #fff; color: var(--red); box-shadow: 0 4px 0 #0003; }
+.fullscreen button { font-weight: 800; letter-spacing: .02em; }
+.fullscreen .b-red { background: #fff; color: var(--red); box-shadow: 0 6px 18px #7f1d1d66; }
 .fullscreen .b-green { background: #fff; color: var(--green); }
 .fullscreen.red { animation: pop .25s ease-out, flash 1s 3; }
 @keyframes flash { 50% { background: #991b1b; } }
@@ -207,7 +208,7 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .card.ping .t { font-size: 17px; }
 .card.urgent { background: #fff; border: 3px solid var(--red); }
 .card.urgent .t { color: var(--red); }
-.card.info { border-left: 5px solid var(--blue); }
+.card.info { border: 2px solid #93c5fd; }
 .card.done-green { border: 3px solid var(--green); }
 .card.done-red { border: 3px solid var(--red); }
 .card.muted { opacity: .7; }
@@ -255,7 +256,65 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .switch input:checked + .slider::after { left: 16px; }
 .switch.disabled { opacity: .45; cursor: not-allowed; }
 
+/* Mum's back camera shouldn't be mirrored */
+.phone.back-cam .call video, .phone.back-cam .call canvas { transform: none; }
+
+/* ---------- "which phone is this?" ---------- */
+body.picking > header, body.picking > main { display: none; }
+.picker { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: grid; place-items: center; padding: 20px; overflow-y: auto; }
+.picker-box { width: 100%; max-width: 420px; text-align: center; }
+.picker-logo { font-size: 56px; }
+.picker h2 { margin: 4px 0 0; font-size: 26px; }
+.picker p { color: var(--muted); margin: 4px 0 14px; font-size: 16px; }
+.picker .field { text-align: left; }
+.picker .field input { display: block; width: 100%; margin-top: 4px; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: #0b0f14; color: var(--text); font: inherit; font-size: 16px; }
+.picker-btns { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.pick { display: flex; flex-direction: column; align-items: flex-start; padding: 12px 16px 12px 70px; position: relative;
+  border-radius: 14px; border: 1px solid var(--line); background: #161b22; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.pick::before { content: attr(data-icon); position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 34px; }
+.pick b { font-size: 19px; }
+.pick small { font-size: 13px; }
+.pick:active { background: var(--blue); }
+.picker-msg { margin-top: 10px; color: #f87171; min-height: 18px; }
+
+/* ---------- one real phone per device ---------- */
+.solo .topbar { padding: 8px 10px; }
+.solo .brand { display: none; }
+.solo .topbar-right { width: 100%; justify-content: flex-end; gap: 6px; }
+.solo #net-status { margin-right: auto; }
+.solo .layout { display: block; min-height: 0; }
+.solo .stage { padding: 0; gap: 0; }
+.solo .phones { display: block; }
+.solo .phone-col:not(.me), .solo .logwrap { display: none; }
+.solo .phone-col.me { gap: 0; }
+.solo .phone-label { padding: 6px 12px; font-size: 14px; }
+.solo .phone { width: 100%; height: calc(100dvh - 90px); border: 0; border-radius: 0; box-shadow: none; }
+.solo .phone::before { display: none; }
+.solo .phone.urgent-ring { box-shadow: inset 0 0 0 6px var(--red); }
+.solo .layout:not(.no-panel) .panel { display: block; position: fixed; inset: 50px 0 0 0; z-index: 100; max-height: none; border: 0; }
+.solo:not(.role-mum) #model-status, .solo:not(.role-mum) #btn-toggle-panel { display: none; }
+
 @media (max-width: 1250px) {
   :root { --phone-w: 270px; --phone-h: 560px; }
   .layout { grid-template-columns: 300px 1fr; }
+}
+
+/* ---------- polish: empty state, feedback, a11y ---------- */
+.notifs:empty::before { content: "No requests yet. If someone video-calls Mum with your face, Family Verify asks you here.";
+  margin: 8px 18px; color: #cbd5e1; font-size: 14px; line-height: 1.5; text-align: center; }
+::selection { background: #3b82f655; }
+input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(--blue); }
+:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+button:not(.round):active, .btn:active { transform: scale(.97); }
+button, .btn, .pick { transition: transform .12s ease-out, background-color .15s ease-out; }
+.pick:hover { border-color: #3b82f6aa; }
+.solo .statusbar { display: none; }
+.solo .home, .solo .lock { padding-top: 34px; }
+.solo .notifs { top: 150px; }
+.solo .phone { height: calc(100dvh - 85px); }
+.solo .topbar .btn.small { min-height: 36px; padding: 6px 12px; }
+@media (prefers-reduced-motion: reduce) {
+  /* the reply countdown is information, not decoration: keep it */
+  :not(.countdown > i), ::before, ::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
