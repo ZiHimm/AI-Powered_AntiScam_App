@@ -62,10 +62,5 @@ class InviteActivity : AppCompatActivity() {
         setContentView(ScrollView(this).apply { addView(root); setBackgroundColor(0xFF0D1117.toInt()) })
     }
 
-    private fun qr(text: String, size: Int): Bitmap {
-        val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 1))
-        return Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565).apply {
-            for (x in 0 until size) for (y in 0 until size) setPixel(x, y, if (m[x, y]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
-        }
-    }
+    private fun qr(text: String, size: Int): Bitmap = Qr.bitmap(text, size)
 }

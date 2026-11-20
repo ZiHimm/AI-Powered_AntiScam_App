@@ -71,13 +71,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FamilyLink.init(this)
+        if (!FamilyLink.setupDone) {   // first run (or an invite link on a new phone): the setup wizard
+            startActivity(Intent(this, SetupActivity::class.java).putExtra(SetupActivity.EXTRA_INVITE, intent?.data?.toString()))
+            finish(); return
+        }
         setContentView(R.layout.activity_main)
         MemberHub.init(this); FamilyLink.listeners.add(MemberHub)
-        val linkInvite = intent?.data?.toString()?.let { Invite.parse(it) }
-        when {
-            linkInvite != null -> main.post { confirmJoin(linkInvite) }       // opened from an invite link
-            FamilyLink.myRole == null -> main.post { askWhoAmI() }
-        }
+        intent?.data?.toString()?.let { Invite.parse(it) }?.let { main.post { confirmJoin(it) } }   // opened from an invite link
         engine = FaceEngine.get(this)
         Notifier.ensureChannels(this)
 
@@ -394,7 +394,7 @@ class MainActivity : AppCompatActivity() {
                 else -> svc.simulateCall(target.id)
             }
         }
-        find<Button>(R.id.btn_change_role).setOnClickListener { askWhoAmI() }
+        find<Button>(R.id.btn_change_role).setOnClickListener { startActivity(Intent(this, SetupActivity::class.java)) }
         find<Button>(R.id.btn_create_family).setOnClickListener { askCreateFamily() }
         find<Button>(R.id.btn_join_family).setOnClickListener { scanInvite.launch(Intent(this, ScanActivity::class.java)) }
         find<Button>(R.id.btn_invite).setOnClickListener {

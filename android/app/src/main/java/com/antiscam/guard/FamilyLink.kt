@@ -100,6 +100,10 @@ object FamilyLink {
     var myPhone: String
         get() = prefs.getString("phone", "") ?: ""
         set(v) { prefs.edit().putString("phone", v.trim()).apply(); profileChanged() }
+    /** The first-run setup wizard was completed (phones set up before the wizard count as done). */
+    var setupDone: Boolean
+        get() = prefs.getBoolean("setup_done", myRole != null)
+        set(v) = prefs.edit().putBoolean("setup_done", v).apply()
     var familyName: String
         get() = prefs.getString("family_name", "") ?: ""
         set(v) = prefs.edit().putString("family_name", v.trim()).apply()
