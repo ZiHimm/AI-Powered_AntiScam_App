@@ -86,7 +86,7 @@ object FamilyLink {
         set(v) { senior = v }
     /** Check my own incoming video calls on this phone (needs the call watcher). */
     var protect: Boolean
-        get() = prefs.getBoolean("protect", true)
+        get() = prefs.getBoolean("protect", senior)   // default: on for seniors, optional for everyone else
         set(v) { prefs.edit().putBoolean("protect", v).apply(); profileChanged() }
 
     var relay: String

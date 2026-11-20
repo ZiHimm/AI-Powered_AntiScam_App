@@ -160,6 +160,7 @@ class MainActivity : AppCompatActivity() {
         }
         val senior = CheckBox(this).apply { text = "I'm a senior citizen: alert my guardians if a scammer targets me"; isChecked = FamilyLink.senior }
         val protect = CheckBox(this).apply { text = "Check my incoming video calls on this phone"; isChecked = FamilyLink.protect }
+        senior.setOnCheckedChangeListener { _, c -> if (c) protect.isChecked = true }   // seniors are protected by default
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0)
             addView(name); addView(chips); addView(senior); addView(protect)

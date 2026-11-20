@@ -4,7 +4,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, jason/step2]
     paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-apk
+  group: android-apk-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -52,21 +52,32 @@ jobs:
           name: AntiScamGuard-apk
           path: android/AntiScamGuard.apk
 
-      - name: Move the android-latest tag to this commit
+      - name: Pick the download (main = demo APK, jason/step2 = preview)
+        id: rel
         run: |
-          git tag -f android-latest
-          git push -f origin android-latest
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "tag=android-latest" >> "$GITHUB_OUTPUT"
+            echo "name=Android app (latest build)" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=android-step2-preview" >> "$GITHUB_OUTPUT"
+            echo "name=Android app (Step 2 preview: everyone protected, branch jason/step2)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move the release tag to this commit
+        run: |
+          git tag -f ${{ steps.rel.outputs.tag }}
+          git push -f origin ${{ steps.rel.outputs.tag }}
 
       - name: Publish as a release download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-latest
-          name: Android app (latest build)
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.name }}
           prerelease: true
           make_latest: false
           files: android/AntiScamGuard.apk
           body: |
-            Latest build of the AntiScam Guard Android app, from commit ${{ github.sha }}.
+            Build of the AntiScam Guard Android app from `${{ github.ref_name }}`, commit ${{ github.sha }}.
 
             **Install:** download `AntiScamGuard.apk` on the phone, open it, allow "Install unknown apps".
             Then follow the setup steps in [android/README.md](https://github.com/${{ github.repository }}/blob/main/android/README.md).
