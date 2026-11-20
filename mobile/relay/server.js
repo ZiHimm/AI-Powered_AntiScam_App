@@ -24,11 +24,14 @@ const { WebSocketServer } = require('ws');
 
 const PORT = +(process.env.PORT || process.argv[2] || 8000);
 const WWW = path.join(__dirname, '..', 'www');
-const ROLES = ['mum', 'son', 'daughter'];
+const ROLES = ['mum', 'son', 'daughter'];   // classic demo roles: always listed in peers (Family Verify expects them)
+// Step 2 ("everyone protected"): any family member id, e.g. "dad", "aisha", "grandma-lim". The classic roles are just ids too.
+const MEMBER_ID = /^[a-z][a-z0-9-]{1,23}$/;
+const MAX_MEMBERS = 8;
 const MONITOR_TOKEN = process.env.MONITOR_TOKEN || '';
 const LIMITS = {
   payload: 64 * 1024,   // biggest real message is a face embedding (~3 KB)
-  perRoom: 12,          // 3 phones + monitors + reconnect overlap
+  perRoom: 20,          // up to 8 members + monitors + reconnect overlap
   rooms: 500,
   // A whole family (and the laptop) often shares ONE public IP: hotspot, venue Wi-Fi, carrier NAT.
   // So the real limits are per connection and per room; per IP is only a loose global cap.
@@ -159,7 +162,7 @@ function peers(room) {
   const out = {};
   // only advertise keys of phones that are connected right now, so a stale key from an
   // earlier session (e.g. before a reinstall) is never handed out and pinned by mistake
-  for (const r of ROLES) {
+  for (const r of new Set([...ROLES, ...room.devices.keys()])) {
     const on = room.devices.has(r);
     out[r] = { online: on, pub: on ? room.hellos[r]?.pub || null : null, name: room.hellos[r]?.name || null };
   }
@@ -236,7 +239,8 @@ wss.on('connection', (ws) => {
         console.log(`[${ts()}] monitor connected, ${mask(room.code)}${ws.canInject ? '' : ' (read-only)'} (${ip})`);
         return;
       }
-      if (!ROLES.includes(m.role)) return;
+      if (typeof m.role !== 'string' || !MEMBER_ID.test(m.role) || m.role === 'monitor') return;
+      if (!room.devices.has(m.role) && room.devices.size >= MAX_MEMBERS) { ws.close(4008, 'family full'); return; }
       const old = room.devices.get(m.role);
       if (old && old !== ws) { old.role = null; old.close(4000, 'replaced by a newer connection'); }
       ws.role = m.role;

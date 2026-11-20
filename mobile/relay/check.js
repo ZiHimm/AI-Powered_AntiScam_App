@@ -93,10 +93,10 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
 
   // a full room refuses with a clear close code, not a silent drop
   const C = code(), crowd = [];
-  for (let i = 0; i < 12; i++) crowd.push(await open(`/f/${C}/ws`));
+  for (let i = 0; i < 20; i++) crowd.push(await open(`/f/${C}/ws`));
   const extra = await open(`/f/${C}/ws`);
   await closed(extra);
-  ok(extra.closeCode === 4008 && extra.closeReason === 'room full', `13th connection to a room is closed with 4008 "room full" (got ${extra.closeCode})`);
+  ok(extra.closeCode === 4008 && extra.closeReason === 'room full', `21st connection to a room is closed with 4008 "room full" (got ${extra.closeCode})`);
   crowd.forEach((w) => w.close());
 
   const tail = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -105,6 +105,20 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
   await sleep(200);
   ok(lastPeers(typed1)?.son.online, 'hyphens and case are ignored: ABCD-…-WXYZ and abcd…wxyz are the same room');
   typed1.close(); typed2.close();
+
+  // Step 2: any family member id, up to 8 per family
+  const F = code(), fam = [];
+  for (const id of ['dad', 'aisha', 'grandma-lim', 'mum', 'son', 'daughter', 'uncle', 'cousin-amy']) fam.push(await phone(F, id));
+  await sleep(200);
+  const pf = lastPeers(fam[0]) || {};
+  ok(pf.aisha?.online && pf['grandma-lim']?.online && pf.son?.online, 'custom member ids join a family and see each other');
+  const ninth = await phone(F, 'stranger');
+  await closed(ninth);
+  ok(ninth.closeCode === 4008 && ninth.closeReason === 'family full', `9th member is refused with 4008 "family full" (got ${ninth.closeCode})`);
+  const bad = await phone(F, 'Not An Id!');
+  await sleep(200);
+  ok(!(lastPeers(fam[0]) || {})['Not An Id!'], 'invalid member ids are ignored');
+  fam.forEach((w) => w.close()); bad.close();
 
   const short = await open('/f/SHORT/ws');
   ok(short.status === 404, 'too-short family code is refused');
