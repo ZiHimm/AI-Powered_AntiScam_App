@@ -257,11 +257,11 @@ class MainActivity : AppCompatActivity() {
         val (level, detail, fix) = when {
             !FamilyLink.protect -> Triple(if (FamilyLink.connected) 0 else 1,
                 "My calls aren't checked on this phone. I'll be asked when someone who looks like me calls the family.",
-                if (FamilyLink.enabled) null else Fix("Connect to my family") { showAdvanced(true); toast("Enter the relay address in section 4") })
+                if (FamilyLink.enabled) null else Fix("Connect to my family") { startActivity(Intent(this, SetupActivity::class.java)) })
             !serviceOn -> Triple(2, "Protection is switched off.", Fix("Turn on protection") { openAccessibilitySettings() })
             Build.VERSION.SDK_INT < 30 -> Triple(2, "This phone needs Android 11 or newer for automatic checks.", null)
             !Notifier.canPost(this) -> Triple(1, "Warnings can't be shown on this phone.", Fix("Allow warnings") { find<Button>(R.id.btn_notif).performClick() })
-            family.isEmpty() -> Triple(1, "No family faces added yet.", Fix("Add family faces") { showAdvanced(true); toast("Add each person in section 2 with 📷") })
+            family.isEmpty() -> Triple(1, "No family faces added yet.", Fix("Add family faces") { showAdvanced(true); toast("Ask your family to add their own face in their app (it arrives here automatically), or add someone under 🛡️ My protection") })
             !isBatteryExempt() -> Triple(1, "Battery saver may switch protection off.", Fix("Keep protection on") { requestBatteryExemption() })
             FamilyLink.enabled && !FamilyLink.connected -> Triple(1, "Can't reach the family phones right now. Warnings still work.", null)
             else -> Triple(0, "Video calls on WhatsApp, Instagram, Messenger and Telegram are checked.", null)
