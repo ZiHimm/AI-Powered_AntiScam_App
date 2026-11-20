@@ -1,0 +1,106 @@
+﻿02:22:48.317  Test call: face matches Son (test from the app, no real call). A deepfake would match too, so now we ask the real Son.
+02:22:48.321  Mum → Son's phone: "Are you calling Mum right now?" nonce 82a5e896…, 15s. No video, audio or location.
+02:22:48.364  Heads-up signed by Mum's phone → Daughter
+02:23:00.461  ✓ Reply signature from Son's phone verified
+02:23:00.463  🔴 Son says it is NOT them. Scam call.
+02:23:00.479  🚨 Urgent alert signed by Mum's phone → Daughter
+02:23:04.754  Couldn't find the end-call button; asked the user to tap it.
+02:24:01.333  📞 WhatsApp call detected. Checking the caller's face…
+02:24:03.223  Face ≈ daughter (distance 0.98)
+02:24:03.951  Face ≈ daughter (distance 0.97)
+02:24:03.953  WhatsApp call: face matches Daughter (seen in 2 of the last 3 frames). A deepfake would match too, so now we ask the real Daughter.
+02:24:03.954  Mum → Daughter's phone: "Are you calling Mum right now?" nonce 37a8e49a…, 15s. No video, audio or location.
+02:24:03.992  Heads-up signed by Mum's phone → Son
+02:24:05.016  Face not in family (closest daughter 1.01)
+02:24:06.007  Face ≈ daughter (distance 0.96)
+02:24:06.992  Face not in family (closest son 1.12)
+02:24:08.028  Face ≈ son (distance 0.95)
+02:24:09.049  Face ≈ son (distance 0.84)
+02:24:10.064  Face ≈ son (distance 0.92)
+02:24:11.120  Face not in family (closest son 1.06)
+02:24:13.150  Face not in family (closest son 1.02)
+02:24:14.167  Face not in family (closest mom 1.18)
+02:24:15.289  Face not in family (closest mom 1.15)
+02:24:18.975  🟠 No reply from Daughter. Asking the secret question.
+02:24:19.002  🚨 Urgent alert signed by Mum's phone → Son
+02:24:22.538  🟢 Caller answered the family secret question.
+02:24:26.481  Face ≈ son (distance 0.85)
+02:24:27.482  Face not in family (closest mom 1.03)
+02:24:28.493  Face ≈ son (distance 0.90)
+02:24:29.515  Face not in family (closest son 1.09)
+02:24:30.512  Face ≈ son (distance 0.94)
+02:24:31.558  Face ≈ son (distance 0.87)
+02:24:32.542  Face ≈ son (distance 0.82)
+02:24:33.552  Face not in family (closest daughter 1.09)
+02:24:36.595  Face ≈ son (distance 0.86)
+02:24:37.606  Face ≈ son (distance 0.83)
+02:24:44.749  Face ≈ son (distance 0.90)
+02:24:45.742  Face ≈ son (distance 1.00)
+02:24:46.776  Face ≈ son (distance 0.90)
+02:24:47.785  Face not in family (closest daughter 1.10)
+02:24:48.783  Face not in family (closest son 1.03)
+02:24:49.799  Face not in family (closest son 1.03)
+02:24:52.846  Face not in family (closest son 1.10)
+02:24:53.886  Face not in family (closest son 1.05)
+02:24:55.716  Call ended (WhatsApp).
+02:24:55.717  📴 Call ended (WhatsApp).
+02:25:39.803  📞 WhatsApp call detected. Checking the caller's face…
+02:25:40.279  Face ≈ son (distance 0.82)
+02:25:41.246  Face ≈ son (distance 0.85)
+02:25:41.250  WhatsApp call: face matches Son (seen in 2 of the last 2 frames). A deepfake would match too, so now we ask the real Son.
+02:25:41.254  Mum → Son's phone: "Are you calling Mum right now?" nonce d55d07c0…, 15s. No video, audio or location.
+02:25:41.280  Heads-up signed by Mum's phone → Daughter
+02:25:42.265  Face ≈ son (distance 0.99)
+02:25:43.285  Face ≈ son (distance 0.99)
+02:25:44.312  Face ≈ son (distance 0.90)
+02:25:45.377  Face ≈ son (distance 0.75)
+02:25:46.400  Face ≈ son (distance 0.82)
+02:25:47.397  Face ≈ son (distance 0.80)
+02:25:48.407  Face ≈ son (distance 0.82)
+02:25:49.416  Face ≈ son (distance 0.66)
+02:25:50.459  Face ≈ son (distance 0.77)
+02:25:51.466  Face ≈ son (distance 0.78)
+02:25:52.460  Face ≈ son (distance 0.79)
+02:25:53.482  Face ≈ son (distance 0.73)
+02:25:54.483  Face ≈ son (distance 0.75)
+02:25:55.540  Face ≈ son (distance 0.75)
+02:25:56.268  🟠 No reply from Son. Asking the secret question.
+02:25:56.293  🚨 Urgent alert signed by Mum's phone → Daughter
+02:25:56.578  Face ≈ son (distance 0.72)
+02:25:57.573  Face ≈ son (distance 0.77)
+02:25:58.590  Face ≈ son (distance 0.83)
+02:25:59.617  Face ≈ son (distance 0.78)
+02:26:00.617  Face ≈ son (distance 0.76)
+02:26:01.625  Face ≈ son (distance 0.83)
+02:26:02.631  Face ≈ son (distance 0.86)
+02:26:03.677  Face not in family (closest son 1.01)
+02:26:04.686  Face not in family (closest daughter 1.08)
+02:26:05.748  Face not in family (closest daughter 1.12)
+02:26:06.740  Face not in family (closest daughter 1.13)
+02:26:07.748  Face not in family (closest son 1.10)
+02:26:17.462  🟢 Caller answered the family secret question.
+02:26:20.033  Face not in family (closest son 1.11)
+02:26:23.168  Call ended (WhatsApp).
+02:26:23.169  📴 Call ended (WhatsApp).
+02:27:29.081  📞 WhatsApp call detected. Checking the caller's face…
+02:27:29.488  Face not in family (closest mom 1.07)
+02:27:30.511  Face ≈ son (distance 0.79)
+02:27:31.527  Face ≈ son (distance 0.79)
+02:27:31.531  WhatsApp call: face matches Son (seen in 2 of the last 3 frames). A deepfake would match too, so now we ask the real Son.
+02:27:31.531  Mum → Son's phone: "Are you calling Mum right now?" nonce 30602264…, 15s. No video, audio or location.
+02:27:31.568  Heads-up signed by Mum's phone → Daughter
+02:27:32.598  Face ≈ son (distance 0.74)
+02:27:33.652  Face ≈ son (distance 0.71)
+02:27:34.694  Face ≈ son (distance 0.88)
+02:27:35.685  Face ≈ son (distance 0.94)
+02:27:36.718  Face ≈ son (distance 0.89)
+02:27:37.729  Face ≈ son (distance 0.75)
+02:27:38.279  ✓ Reply signature from Son's phone verified
+02:27:38.287  🔴 Son says it is NOT them. Scam call.
+02:27:38.323  🚨 Urgent alert signed by Mum's phone → Daughter
+02:27:38.804  Face ≈ son (distance 0.89)
+02:27:44.787  Couldn't find the end-call button; asked the user to tap it.
+02:27:47.624  Couldn't find the end-call button; asked the user to tap it.
+02:27:49.567  Hung up the call for the user.
+02:27:50.860  Call ended (WhatsApp).
+02:27:50.860  📴 Call ended (WhatsApp).
