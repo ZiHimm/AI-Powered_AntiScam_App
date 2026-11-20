@@ -39,6 +39,7 @@ class CallWatcherService : AccessibilityService() {
     private lateinit var audio: AudioManager
     private lateinit var engine: FaceEngine
     private lateinit var overlay: WarningOverlay
+    private lateinit var family: FamilyCheck
 
     private var activeApp: String? = null     // call app name while a call is being checked
     private var busy = false                  // a frame is being processed
@@ -52,6 +53,10 @@ class CallWatcherService : AccessibilityService() {
         audio = getSystemService(AudioManager::class.java)
         engine = FaceEngine.get(this)
         overlay = WarningOverlay(this)
+        family = FamilyCheck(overlay) { hangUpFromOverlay() }
+        FamilyLink.init(this)
+        FamilyLink.listener = family
+        FamilyLink.start()
         running = this
         Notifier.ensureChannels(this)
         LiveLog.serviceConnected = true
@@ -66,6 +71,7 @@ class CallWatcherService : AccessibilityService() {
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.hide()
+        if (::family.isInitialized) { family.end(quiet = true); if (FamilyLink.listener === family) FamilyLink.listener = null }
         if (running === this) running = null
         LiveLog.serviceConnected = false
         LiveLog.add("Call watcher off.")
@@ -105,6 +111,7 @@ class CallWatcherService : AccessibilityService() {
         LiveLog.add("📞 $app call detected. Checking the caller's face…")
         Notifier.status(this, "$app call: looking at the caller's face on this phone")
         if (people.none { !it.isOwner }) LiveLog.add("No family faces enrolled yet. Add some in the app.")
+        family.begin(app)
     }
 
     private fun endCall() {
@@ -113,6 +120,7 @@ class CallWatcherService : AccessibilityService() {
         votes.clear(); lastDecision = null; overlaysShown.clear()
         Notifier.clearStatus(this)
         overlay.hide()
+        family.end()
     }
 
     /** Press the call app's own end-call button, found by its label. Returns false if we couldn't. */
@@ -135,14 +143,25 @@ class CallWatcherService : AccessibilityService() {
     }
 
     private fun showOnce(key: String, level: WarningOverlay.Level, title: String, body: String, onHangUp: (() -> Unit)? = null) {
-        if (overlaysShown.add(key)) overlay.show(level, title, body, onHangUp)
+        if (!overlaysShown.add(key)) return
+        val dismiss = WarningOverlay.Action("Dismiss") { overlay.hide() }
+        overlay.show(level, title, body,
+            if (onHangUp == null) listOf(dismiss)
+            else listOf(WarningOverlay.Action("HANG UP", WarningOverlay.Style.BAD) { onHangUp() }, dismiss))
     }
 
     /** Shows the warning exactly as during a real call, so it can be seen without making one. */
     fun previewWarning(name: String) {
-        overlay.show(WarningOverlay.Level.DANGER, "This may NOT be $name",
+        showOnce("preview-${System.nanoTime()}", WarningOverlay.Level.DANGER, "This may NOT be $name",
             "The face doesn't look like $name. Don't send money or share codes. " +
                 "Hang up and call $name back on their usual number. (Preview)") { overlay.hide() }
+    }
+
+    /** Runs the family check as if a call from [role] were on screen (no WhatsApp call needed). */
+    fun simulateCall(role: String) {
+        overlay.hide()
+        family.begin("Test")
+        family.verify(role, "test from the app, no real call")
     }
 
     private fun hangUpFromOverlay() {
@@ -205,6 +224,10 @@ class CallWatcherService : AccessibilityService() {
         if (decision == lastDecision) return
         lastDecision = decision
 
+        // Once the real family member has been asked, their answer decides; ignore later frames
+        // (the warning card itself can hide the face in screenshots).
+        if (family.handling) return
+
         when {
             top == "?blocked" -> {
                 LiveLog.add("$app blocks screenshots on this screen. Can't see the caller.")
@@ -213,6 +236,7 @@ class CallWatcherService : AccessibilityService() {
             top == "?noface" -> Notifier.status(this, "$app call: no clear face on screen yet")
             top == "?stranger" && claimed != null -> {
                 LiveLog.add("🚨 Screen says \"$claimed\" but the face doesn't match.")
+                FamilyLink.roleForName(claimed)?.let { family.nameButNotFace(it) }
                 showOnce(decision, WarningOverlay.Level.DANGER, "This may NOT be $claimed",
                     "The face doesn't look like $claimed. Don't send money or share codes. " +
                         "Hang up and call $claimed back on their usual number.") { hangUpFromOverlay() }
@@ -228,6 +252,12 @@ class CallWatcherService : AccessibilityService() {
                 Notifier.alert(this, "Caller isn't in your family list",
                     "This $app video caller doesn't match anyone in your family. Be careful with requests for money.",
                     urgent = false)
+            }
+            FamilyLink.connected && FamilyLink.roleForName(top) != null -> {
+                // Looks like a family member: ask the REAL person on their own phone
+                family.verify(FamilyLink.roleForName(top)!!, "seen in $count of the last ${votes.size} frames")
+                Notifier.alert(this, "📞 Checking with $top…",
+                    "This video call looks like $top. Asking $top on their own phone.", urgent = false)
             }
             else -> {
                 val nameNote = if (claimed != null && !claimed.equals(top, true)) " The screen shows \"$claimed\"." else ""

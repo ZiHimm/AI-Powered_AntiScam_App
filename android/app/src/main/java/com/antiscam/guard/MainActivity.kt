@@ -18,6 +18,10 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.Switch
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.PickVisualMediaRequest
@@ -31,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private val main = Handler(Looper.getMainLooper())
     private lateinit var engine: FaceEngine
     private var logVersion = -1L
+    private var familyVersion = -1L
 
     /** What the photo picker result is for. */
     private sealed interface Pick {
@@ -76,6 +81,8 @@ class MainActivity : AppCompatActivity() {
             else svc.previewWarning(FaceStore.load(this).firstOrNull { !it.isOwner }?.name ?: "Son")
         }
 
+        setupFamily()
+
         val bar = find<SeekBar>(R.id.threshold)
         bar.progress = ((FaceStore.threshold(this) - 0.6f) * 100).toInt().coerceIn(0, 80)
         showThreshold()
@@ -101,6 +108,7 @@ class MainActivity : AppCompatActivity() {
 
     private val pollLog = object : Runnable {
         override fun run() {
+            if (FamilyLink.version != familyVersion) { familyVersion = FamilyLink.version; renderFamily() }
             if (LiveLog.version != logVersion) {
                 logVersion = LiveLog.version
                 find<TextView>(R.id.log).text = LiveLog.text().ifEmpty { "Nothing yet." }
@@ -122,6 +130,7 @@ class MainActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= 30) "✅ Android ${Build.VERSION.RELEASE}: automatic face checks supported"
             else "⚠️ Android ${Build.VERSION.RELEASE}: automatic face checks need Android 11 or newer"
         renderPeople()
+        renderFamily()
     }
 
     private fun refreshServiceStatus() {
@@ -150,6 +159,68 @@ class MainActivity : AppCompatActivity() {
         find<TextView>(R.id.threshold_label).text =
             "Match strictness: %.2f (lower = stricter). Same person usually < 0.9, different people > 1.1.".format(
                 FaceStore.threshold(this))
+    }
+
+    // ------------------------------------------------------------------ family relay
+
+    private fun setupFamily() {
+        FamilyLink.init(this)
+        val addr = find<EditText>(R.id.relay_addr)
+        val on = find<Switch>(R.id.family_on)
+        addr.setText(FamilyLink.relay)
+        on.isChecked = FamilyLink.enabled
+        find<Switch>(R.id.elder_on).isChecked = FamilyLink.elderMode
+        find<CheckBox>(R.id.g_son).isChecked = FamilyLink.isGuardian("son")
+        find<CheckBox>(R.id.g_daughter).isChecked = FamilyLink.isGuardian("daughter")
+        find<EditText>(R.id.secret_q).setText(FamilyLink.secretQuestion)
+
+        fun saveAddr() {
+            val v = addr.text.toString().trim()
+            if (v != FamilyLink.relay) { FamilyLink.relay = v; if (FamilyLink.enabled) FamilyLink.restart() }
+        }
+        addr.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_DONE) saveAddr(); false }
+        addr.setOnFocusChangeListener { _, has -> if (!has) saveAddr() }
+        on.setOnCheckedChangeListener { _, checked ->
+            saveAddr()
+            if (checked && FamilyLink.relay.isBlank()) { toast("Enter the relay address shown on the laptop first"); on.isChecked = false; return@setOnCheckedChangeListener }
+            FamilyLink.enabled = checked
+            if (checked) FamilyLink.restart() else FamilyLink.stop()
+        }
+        find<Switch>(R.id.elder_on).setOnCheckedChangeListener { _, c -> FamilyLink.elderMode = c }
+        find<CheckBox>(R.id.g_son).setOnCheckedChangeListener { _, c -> FamilyLink.setGuardian("son", c) }
+        find<CheckBox>(R.id.g_daughter).setOnCheckedChangeListener { _, c -> FamilyLink.setGuardian("daughter", c) }
+        find<EditText>(R.id.secret_q).addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(e: Editable?) { e?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { FamilyLink.secretQuestion = it } }
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
+        find<Button>(R.id.btn_sim_son).setOnClickListener {
+            val svc = CallWatcherService.running
+            when {
+                svc == null -> toast("Turn on the call watcher first")
+                !FamilyLink.connected -> toast("Connect to the family relay first")
+                else -> svc.simulateCall("son")
+            }
+        }
+        find<Button>(R.id.btn_forget_keys).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setMessage("Forget Son's and Daughter's paired keys? Do this if one of them reinstalled the family app.")
+                .setPositiveButton("Forget") { _, _ -> FamilyLink.forgetPins() }
+                .setNegativeButton("Cancel", null).show()
+        }
+        if (FamilyLink.enabled && !FamilyLink.connected) FamilyLink.start()
+    }
+
+    private fun renderFamily() {
+        val lines = mutableListOf(FamilyLink.status, "This phone (Mum): key ${DeviceKey.fingerprint}")
+        for ((role, name) in FamilyLink.MEMBERS) {
+            val online = if (FamilyLink.isOnline(role)) "🟢 online" else "⚪ offline"
+            val pin = FamilyLink.pinOf(role)?.let { "key $it" } ?: "not paired yet"
+            val warn = if (role in FamilyLink.keyMismatch) " ⚠️ KEY MISMATCH" else ""
+            val face = if (FaceStore.load(this).any { it.name.equals(name, true) }) "" else " · no face enrolled as \"$name\""
+            lines += "$name: $online · $pin$warn$face"
+        }
+        find<TextView>(R.id.family_status).text = lines.joinToString("\n")
     }
 
     // ------------------------------------------------------------------ people

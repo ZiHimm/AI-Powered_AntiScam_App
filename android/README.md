@@ -13,8 +13,30 @@ Warnings are drawn **on top of the video call** (big text, **HANG UP** / **Dismi
 | Face isn't anyone in the family | *"Caller isn't in your family list."* |
 | App hides its video from other apps | Status: *"Can't check this caller."* |
 
-**Not built yet (next phase):** asking the real family member on their own phone *"Are you calling Mum?"* and alerting
-guardians (Firebase + signed alerts, as in the web demo).
+### Ask the real family member (family relay)
+
+Connected to the laptop relay from [`mobile/`](../mobile/), this app acts as **Mum's phone** in the family system.
+Son's and Daughter's phones run the `mobile/` app. When a WhatsApp call's face looks like Son:
+
+1. Son's phone buzzes: *"Are you calling Mum right now?"* (single-use nonce, 15 s)
+2. Mum sees **"Checking with Son…"** over the call, with a countdown.
+3. Son's signed **Yes** → 🟢 *"This is really Son"*. **No** → 🔴 *"SCAM. Hang up."* No reply / Son offline →
+   🟠 the family secret question, with **Answered right / Couldn't answer** buttons.
+4. In Elder Mode, guardians get signed alerts and can reply with **Call Mum now** or a signed **Tell Mum to hang up**,
+   which appears over Mum's call.
+
+Messages use the same format and checks as `mobile/www/app.js`: Mum's key is an ECDSA P-256 key in the Android
+Keystore. Son's and Daughter's keys are pinned the first time they're seen, and every reply and alert is signature-checked.
+
+**Set up** (Mum's phone, section *4 · Family phones*):
+1. Start the relay on the laptop (`cd mobile && npm install && npm run relay`) and type the address it prints
+   (e.g. `192.168.1.104:8000`). Turn on **Connect to family relay**.
+2. Enrol Son's and Daughter's faces here, named exactly **Son** and **Daughter**.
+3. **Test: a call that looks like Son** runs the whole flow without a WhatsApp call.
+
+**Don't run the `mobile/` app as Mum at the same time.** The relay allows one Mum, and this app stops reconnecting if
+another phone takes the role. If Son's or Daughter's phone was paired with the `mobile/` Mum app before, tap
+**Forget paired family keys** there once, so it pairs with this phone's key instead.
 
 ## Install on a phone (no Play Store)
 
@@ -71,6 +93,9 @@ CallWatcherService (AccessibilityService)
 | `Notifier.kt` | Alert and status notifications |
 | `WarningOverlay.kt` | Big warning drawn over the call (accessibility overlay, no extra permission) |
 | `EnrolActivity.kt` | Front-camera enrolment: 3 face samples, no photos saved |
+| `FamilyLink.kt` | WebSocket client for the `mobile/` relay as Mum's phone; key pinning; settings |
+| `FamilyCheck.kt` | Ask the real family member, handle signed replies and guardian messages, alert guardians |
+| `DeviceKey.kt` | Mum's ECDSA P-256 key in the Android Keystore; WebCrypto-compatible signatures (P1363) and JWK |
 | `assets/mobilefacenet.tflite` | Face embedding model (MobileFaceNet, 112×112 → 192-d), from [MCarlomagno/FaceRecognitionAuth](https://github.com/MCarlomagno/FaceRecognitionAuth) |
 
 ### Known limits

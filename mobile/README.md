@@ -12,8 +12,10 @@ demo at the repo root is untouched and still works as a backup.
   reset all phones, skip to "no reply"), and a **scammer console** that injects forged and replayed alerts.
 - **Faces:** enrol on Mum's phone (camera/photo), or Son/Daughter tap **Scan my face & send** on their own phone
   (only the signed 128-number embedding is sent).
-- **Not yet:** detecting real WhatsApp calls. The call on Mum's phone is started by a button and uses her camera.
-  (The native app on `main` does WhatsApp detection; the plan is to connect it to this relay.)
+- **Real WhatsApp calls:** install the native detector from [`android/`](../android/) on Mum's phone instead of this
+  app, and connect it to this relay (section *4 · Family phones*). It joins as **Mum**, so a real WhatsApp video call
+  whose face looks like Son sends this same *"Are you calling Mum?"* to Son's phone. Run only one Mum at a time; if Son or
+  Daughter paired with this app's Mum before, tap **Forget paired family keys** on their phone once.
 
 ## Run it
 

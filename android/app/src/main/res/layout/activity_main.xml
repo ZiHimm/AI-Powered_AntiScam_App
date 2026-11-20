@@ -65,6 +65,45 @@
             android:layout_height="wrap_content"
             android:max="80" />
 
+        <!-- 4. Family relay -->
+        <TextView style="@style/Section" android:text="4 · Family phones" />
+        <TextView
+            style="@style/Body"
+            android:text="Connect to the laptop relay (mobile/ folder) so the REAL Son or Daughter is asked “Are you calling Mum?” on their own phone. Enrol their faces here named exactly Son and Daughter." />
+
+        <EditText
+            android:id="@+id/relay_addr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Relay address, e.g. 192.168.1.104:8000"
+            android:imeOptions="actionDone"
+            android:inputType="textUri"
+            android:singleLine="true"
+            android:textColor="#E6EDF3"
+            android:textColorHint="#6E7681" />
+
+        <Switch
+            android:id="@+id/family_on"
+            style="@style/Body"
+            android:text="Connect to family relay" />
+        <TextView android:id="@+id/family_status" style="@style/Body" android:textSize="13sp" />
+
+        <Switch android:id="@+id/elder_on" style="@style/Body" android:text="Elder Mode: also alert guardians" />
+        <CheckBox android:id="@+id/g_son" style="@style/Body" android:text="Son is a guardian" />
+        <CheckBox android:id="@+id/g_daughter" style="@style/Body" android:text="Daughter is a guardian" />
+
+        <EditText
+            android:id="@+id/secret_q"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Family secret question"
+            android:inputType="textCapSentences"
+            android:textColor="#E6EDF3"
+            android:textColorHint="#6E7681" />
+
+        <Button android:id="@+id/btn_sim_son" style="@style/Btn" android:text="Test: a call that looks like Son" />
+        <Button android:id="@+id/btn_forget_keys" style="@style/Btn" android:text="Forget paired family keys" />
+
         <!-- 4. Log -->
         <TextView style="@style/Section" android:text="Activity" />
         <TextView
