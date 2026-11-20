@@ -16,6 +16,10 @@ object FaceStore {
     private const val KEY_PEOPLE = "people"
     private const val KEY_THRESHOLD = "threshold"
     const val DEFAULT_THRESHOLD = 1.0f // L2 distance between normalised embeddings; lower = stricter
+    /** Asking someone's phone needs a clearer match than a "looks like" hint: threshold minus this… */
+    const val CONFIDENT_GAP = 0.08f // 0.92 by default: real Son matched 0.66–0.92, wrong matches were 0.96–0.98 (test 21 Nov)
+    /** …and the best person must beat the next-closest person by at least this much. */
+    const val MARGIN = 0.05f
 
     fun load(ctx: Context): MutableList<Person> {
         val raw = prefs(ctx).getString(KEY_PEOPLE, null) ?: return mutableListOf()
@@ -71,6 +75,11 @@ object FaceStore {
         }
         return Match(best, bestD)
     }
+
+    /** Every enrolled person with their closest sample's distance, best first. */
+    fun ranked(people: List<Person>, embedding: FloatArray): List<Match> =
+        people.map { p -> Match(p, p.embeddings.minOfOrNull { distance(it, embedding) } ?: Float.MAX_VALUE) }
+            .sortedBy { it.distance }
 
     private fun distance(a: FloatArray, b: FloatArray): Float {
         if (a.size != b.size) return Float.MAX_VALUE

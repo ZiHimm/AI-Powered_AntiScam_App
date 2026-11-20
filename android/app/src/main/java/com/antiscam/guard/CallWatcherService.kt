@@ -1,7 +1,9 @@
 package com.antiscam.guard
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.graphics.Bitmap
+import android.graphics.Path
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
@@ -32,7 +34,7 @@ class CallWatcherService : AccessibilityService() {
         /** The running service (if the user switched it on), for the in-app "Preview the warning" button. */
         @Volatile var running: CallWatcherService? = null; private set
         private const val VOTES = 3       // decide on the most common result of the last 3 frames…
-        private const val AGREE = 2       // …once at least 2 of them agree
+        private const val AGREE = 2       // …once at least 2 of them agree (only clear matches count, see FaceStore.CONFIDENT_GAP)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -164,14 +166,31 @@ class CallWatcherService : AccessibilityService() {
         family.verify(role, "test from the app, no real call")
     }
 
+    /**
+     * HANG UP: press the call app's own end-call button. During a video call WhatsApp hides its controls
+     * after a few seconds, so if the button isn't there: move our card aside, tap the middle of the call
+     * screen to bring the controls back, then look again.
+     */
     private fun hangUpFromOverlay() {
-        if (tryHangUp()) {
-            LiveLog.add("Hung up the call for the user.")
-            overlay.hide()
-        } else {
-            LiveLog.add("Couldn't find the end-call button; asked the user to tap it.")
-            overlay.updateBody("Tap the red ✆ button on the call screen to hang up. Then call them back on their usual number.")
+        if (tryHangUp()) { LiveLog.add("Hung up the call for the user."); overlay.hide(); return }
+        overlay.hide() // so the tap reaches the call screen, not our card
+        val dm = resources.displayMetrics
+        val tap = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(
+            Path().apply { moveTo(dm.widthPixels / 2f, dm.heightPixels * 0.45f) }, 0, 60)).build()
+        val retry = Runnable {
+            if (tryHangUp()) LiveLog.add("Hung up the call for the user (after showing the call controls).")
+            else {
+                LiveLog.add("Couldn't find the end-call button; asked the user to tap it.")
+                overlay.show(WarningOverlay.Level.DANGER, "Hang up now",
+                    "Tap the red ✆ button at the bottom of the call screen. Then call them back on their usual number.",
+                    listOf(WarningOverlay.Action("OK") { overlay.hide() }))
+            }
         }
+        val sent = dispatchGesture(tap, object : GestureResultCallback() {
+            override fun onCompleted(d: GestureDescription?) { main.postDelayed(retry, 450) }
+            override fun onCancelled(d: GestureDescription?) { main.postDelayed(retry, 450) }
+        }, null)
+        if (!sent) main.postDelayed(retry, 100)
     }
 
     @RequiresApi(30)
@@ -202,12 +221,21 @@ class CallWatcherService : AccessibilityService() {
         val threshold = FaceStore.threshold(this)
         for (face in engine.findFaces(bmp)) {
             if (face.areaFraction < 0.01f) continue // too tiny to judge
-            val m = FaceStore.best(people, face.embedding)
-            val matched = m.person != null && m.distance <= threshold
-            if (matched && m.person!!.isOwner) continue // our own camera preview, look at the next face
-            LiveLog.add(if (matched) "Face ≈ ${m.person!!.name} (distance %.2f)".format(m.distance)
-                        else "Face not in family (closest ${m.person?.name ?: "-"} %.2f)".format(m.distance))
-            return if (matched) m.person!!.name else "?stranger"
+            val ranked = FaceStore.ranked(people, face.embedding)
+            val best = ranked.firstOrNull()
+            val next = ranked.getOrNull(1)
+            val matched = best != null && best.distance <= threshold
+            if (matched && best!!.person!!.isOwner) continue // our own camera preview, look at the next face
+            // A clear match: well inside the limit AND clearly closer than the next person
+            val confident = matched && best!!.distance <= threshold - FaceStore.CONFIDENT_GAP &&
+                (next == null || next.distance - best.distance >= FaceStore.MARGIN)
+            val nextTxt = next?.let { " (next: ${it.person!!.name} %.2f)".format(it.distance) } ?: ""
+            LiveLog.add(when {
+                confident -> "Face ≈ ${best!!.person!!.name} (distance %.2f)$nextTxt".format(best.distance)
+                matched -> "Face maybe ${best!!.person!!.name} (distance %.2f), not sure$nextTxt".format(best.distance)
+                else -> "Face not in family (closest ${best?.person?.name ?: "-"} %.2f)$nextTxt".format(best?.distance ?: Float.NaN)
+            })
+            return when { confident -> best!!.person!!.name; matched -> "?unsure"; else -> "?stranger" }
         }
         return "?noface"
     }
@@ -234,6 +262,7 @@ class CallWatcherService : AccessibilityService() {
                 Notifier.status(this, "$app hides the call video from other apps. Can't check this caller.")
             }
             top == "?noface" -> Notifier.status(this, "$app call: no clear face on screen yet")
+            top == "?unsure" -> Notifier.status(this, "$app call: the face is a weak match, still looking")
             top == "?stranger" && claimed != null -> {
                 LiveLog.add("🚨 Screen says \"$claimed\" but the face doesn't match.")
                 FamilyLink.roleForName(claimed)?.let { family.nameButNotFace(it) }

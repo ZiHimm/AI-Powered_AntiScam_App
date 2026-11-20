@@ -51,7 +51,10 @@ object FamilyLink {
     var secretQuestion: String
         get() = prefs.getString("secret", null) ?: "What did we eat after Grandma's 70th birthday?"
         set(v) = prefs.edit().putString("secret", v).apply()
-    val replySeconds = 15
+    /** How long Son/Daughter get to answer. 15 s was too short on real phones (unlock + read + fingerprint). */
+    var replySeconds: Int
+        get() = prefs.getInt("reply_s", 30)
+        set(v) = prefs.edit().putInt("reply_s", v.coerceIn(10, 60)).apply()
 
     fun isGuardian(role: String) = prefs.getBoolean("guardian_$role", true)
     fun setGuardian(role: String, on: Boolean) { prefs.edit().putBoolean("guardian_$role", on).apply(); sendConfig() }

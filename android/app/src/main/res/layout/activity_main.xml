@@ -101,6 +101,13 @@
             android:textColor="#E6EDF3"
             android:textColorHint="#6E7681" />
 
+        <TextView android:id="@+id/reply_label" style="@style/Body" />
+        <SeekBar
+            android:id="@+id/reply_s"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="50" />
+
         <Button android:id="@+id/btn_sim_son" style="@style/Btn" android:text="Test: a call that looks like Son" />
         <Button android:id="@+id/btn_forget_keys" style="@style/Btn" android:text="Forget paired family keys" />
 

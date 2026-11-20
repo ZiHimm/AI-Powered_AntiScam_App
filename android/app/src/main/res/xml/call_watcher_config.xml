@@ -6,6 +6,7 @@
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
+    android:canPerformGestures="true"
     android:description="@string/service_description"
     android:notificationTimeout="300"
     android:packageNames="com.whatsapp,com.whatsapp.w4b,com.instagram.android,com.facebook.orca,org.telegram.messenger" />

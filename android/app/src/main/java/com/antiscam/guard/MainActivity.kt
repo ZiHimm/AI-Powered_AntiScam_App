@@ -157,8 +157,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun showThreshold() {
         find<TextView>(R.id.threshold_label).text =
-            "Match strictness: %.2f (lower = stricter). Same person usually < 0.9, different people > 1.1.".format(
-                FaceStore.threshold(this))
+            ("Match strictness: %.2f (lower = stricter). Family phones are only asked below %.2f, " +
+                "with 2 of 3 frames agreeing. Same person usually < 0.9, different people > 1.0.").format(
+                FaceStore.threshold(this), FaceStore.threshold(this) - FaceStore.CONFIDENT_GAP)
     }
 
     // ------------------------------------------------------------------ family relay
@@ -193,6 +194,15 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(e: Editable?) { e?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { FamilyLink.secretQuestion = it } }
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
+        val reply = find<SeekBar>(R.id.reply_s)
+        fun showReply() { find<TextView>(R.id.reply_label).text = "Time to answer on their phone: ${FamilyLink.replySeconds}s" }
+        reply.progress = FamilyLink.replySeconds - 10
+        showReply()
+        reply.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar, v: Int, fromUser: Boolean) { if (fromUser) { FamilyLink.replySeconds = 10 + v; showReply() } }
+            override fun onStartTrackingTouch(s: SeekBar) {}
+            override fun onStopTrackingTouch(s: SeekBar) {}
         })
         find<Button>(R.id.btn_sim_son).setOnClickListener {
             val svc = CallWatcherService.running
