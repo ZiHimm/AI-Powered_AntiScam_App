@@ -1,0 +1,13 @@
+08:08:33.512  Joined "Tan Family", invited by Son (key e6:7b:99:66:6d:85 pinned from the invite).
+08:08:33.672  Dad's phone connected. Device key 32:40:f3:ac:19:ab
+08:08:33.685  Son's phone is online
+08:13:51.370  Paired with Daughter's phone. Key fc:4d:85:d2:6f:f2 pinned on Dad's phone.
+08:13:51.381  Daughter's phone is online
+08:23:41.118  Face model OK: MobileFaceNet 112px → 192-d, probe norm=1.000
+08:24:07.081  Added 3 face samples for Dad from the camera
+08:27:06.570  Call watcher on (MobileFaceNet 112px → 192-d). Waiting for a video call…
+09:23:25.011  Added 3 face samples for dad from the camera
+09:29:28.859  Dad's phone connected. Device key 32:40:f3:ac:19:ab
+09:29:29.681  Son's phone is online
+09:29:30.711  Daughter's phone is online
+09:31:12.706  Added 3 face samples for dad from the camera

@@ -1,0 +1,17 @@
+[9:29:28 AM] dad online, room D6J9… (192.168.1.109)
+[9:29:29 AM] son online, room D6J9… (192.168.1.110)
+[9:29:29 AM] msg room D6J9… son -> dad: profile
+[9:29:29 AM] msg room D6J9… son -> dad: config
+[9:29:29 AM] msg room D6J9… dad -> son: profile
+[9:29:29 AM] msg room D6J9… dad -> son: config
+[9:29:30 AM] daughter online, room D6J9… (192.168.1.111)
+[9:29:30 AM] msg room D6J9… daughter -> son: profile
+[9:29:30 AM] msg room D6J9… daughter -> dad: profile
+[9:29:30 AM] msg room D6J9… daughter -> son: config
+[9:29:30 AM] msg room D6J9… daughter -> dad: config
+[9:29:30 AM] msg room D6J9… dad -> daughter: profile
+[9:29:30 AM] msg room D6J9… dad -> son: config
+[9:29:30 AM] msg room D6J9… dad -> daughter: config
+[9:29:30 AM] msg room D6J9… son -> daughter: profile
+[9:29:30 AM] msg room D6J9… son -> dad: config
+[9:29:30 AM] msg room D6J9… son -> daughter: config

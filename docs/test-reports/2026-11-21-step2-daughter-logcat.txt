@@ -1,0 +1,5 @@
+08:13:50.618  Joined "Tan Family", invited by Son (key e6:7b:99:66:6d:85 pinned from the invite).
+08:13:50.762  Daughter's phone connected. Device key fc:4d:85:d2:6f:f2
+08:13:50.815  Son's phone is online
+08:13:50.834  Paired with Dad's phone. Key 32:40:f3:ac:19:ab pinned on Daughter's phone.
+08:13:50.836  Dad's phone is online
