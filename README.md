@@ -4,7 +4,18 @@ Browser demo with three phones on one page: **Mum** (receiver), **Son** (member/
 The face detection and matching are real and run in the browser with face-api.js. The push network between phones is
 simulated, but the nonces and ECDSA P-256 signatures are real (WebCrypto), so forged and replayed alerts genuinely fail.
 
-## Run it
+## Live demo
+
+**https://zihimm.github.io/AI-Powered_AntiScam_App/** (open in Chrome or Safari and allow camera access)
+
+### Install it on your phone (PWA)
+- **iPhone (Safari):** open the link, tap **Share** and then **Add to Home Screen**.
+- **Android (Chrome):** open the link, tap **⋮** and then **Install app** (or **Add to Home screen**).
+
+It opens full-screen like a native app. After the first visit the app and face models (~13 MB) are cached,
+so it keeps working offline.
+
+## Run it locally
 
 ```bash
 ./start.sh            # serves http://localhost:8000 and opens it
@@ -60,5 +71,8 @@ index.html     layout: setup panel, 3 phones, log
 styles.css     phone mock-ups, Standard/Elder styles
 app.js         face pipeline, call state machine, signed alerts, phones
 start.sh       local server
+sw.js          service worker (offline cache, installable PWA)
+manifest.webmanifest  PWA name, icons, colours
+icons/         app icons
 vendor/        face-api.js 1.7.15 (@vladmandic, MIT) + model weights
 ```

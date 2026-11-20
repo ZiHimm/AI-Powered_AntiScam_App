@@ -116,8 +116,8 @@ async function loadModels() {
   const pill = $('#model-status');
   if (location.protocol === 'file:') {
     pill.className = 'pill pill-err';
-    pill.textContent = 'Open via ./start.sh (http://localhost), not file://';
-    log('warn', 'Face models can\'t load from file://. Run <b>./start.sh</b> and open http://localhost:8000. Forced-face demo still works.');
+    pill.textContent = 'Open the hosted site or ./start.sh, not file://';
+    log('warn', 'Face models can\'t load from file://. Open the hosted (https) site, or run <b>./start.sh</b> and open http://localhost:8000. Forced-face demo still works.');
     return;
   }
   try {
@@ -1034,8 +1034,14 @@ function resetDemo() {
   setInterval(tickClocks, 10000);
   syncSettingsUI();
   if (!window.isSecureContext || !crypto.subtle) {
-    log('warn', 'This page needs a secure context (http://localhost) for the camera and WebCrypto. Run ./start.sh.');
+    log('warn', 'This page needs a secure context (https:// or http://localhost) for the camera and WebCrypto. Open the hosted https site, or run ./start.sh.');
     return;
+  }
+  // PWA: installable + offline. Caches the app and face models after the first visit.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(
+      () => log('sec', 'Offline mode ready: app + face models are cached on this device.'),
+      err => console.warn('Service worker not registered', err));
   }
   await initKeys();
   log('sec', 'Each device made its own ECDSA P-256 key pair. Public keys were exchanged when the family circle was set up.');
