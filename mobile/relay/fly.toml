@@ -4,7 +4,7 @@ app = "family-verify-relay"      # change if the name is taken
 primary_region = "sin"           # Singapore, closest to Malaysia
 
 [http_service]
-  internal_port = 8080
+  internal_port = 8000
   force_https = true
   # Never sleep: waking a stopped machine takes seconds and drops the phones mid-demo.
   auto_stop_machines = "off"

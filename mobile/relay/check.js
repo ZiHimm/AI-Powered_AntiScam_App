@@ -22,7 +22,7 @@ function open(path, hello) {
     ws.on('message', (d) => ws.inbox.push(JSON.parse(d)));
     ws.on('open', () => { if (hello) ws.send(JSON.stringify(hello)); setTimeout(() => resolve(ws), 150); });
     ws.on('unexpected-response', (_req, res) => { ws.status = res.statusCode; resolve(ws); });
-    ws.on('close', (c) => { ws.closeCode = c; });
+    ws.on('close', (c, r) => { ws.closeCode = c; ws.closeReason = String(r); });
     ws.on('error', () => {});
   });
 }
@@ -73,8 +73,29 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
   laptop.close();
 
   const son2 = await phone(A, 'son');
+  const mumB = await phone(B, 'mum');
   await sleep(300);
   ok(son.closeCode === 4000, 'a second "son" replaces the first (close code 4000)');
+  ok(mum.readyState === WebSocket.OPEN && mumB.readyState === WebSocket.OPEN, "a Mum in room B does not replace the Mum in room A");
+
+  // per-connection message limit: a flood from one phone is cut, a second phone on the SAME IP is unaffected
+  const before = daughter.inbox.filter((m) => m.t === 'msg').length;
+  for (let i = 0; i < 300; i++) son2.send(JSON.stringify({ t: 'msg', to: 'daughter', body: { kind: 'flood' } }));
+  await sleep(500);
+  mumB.send(JSON.stringify({ t: 'msg', to: 'son', body: { kind: 'after-flood' } }));
+  await sleep(300);
+  const flooded = daughter.inbox.filter((m) => m.t === 'msg').length - before;
+  ok(flooded >= 50 && flooded <= 80, `a flood of 300 messages from one phone is cut to the burst (${flooded} delivered)`);
+  ok(son2.inbox.some((m) => m.t === 'error' && m.code === 4029), 'the flooding phone is told it is rate limited (4029)');
+  ok(otherSon.inbox.some((m) => m.t === 'msg' && m.body?.kind === 'after-flood'), 'another phone on the same IP still gets through');
+
+  // a full room refuses with a clear close code, not a silent drop
+  const C = code(), crowd = [];
+  for (let i = 0; i < 12; i++) crowd.push(await open(`/f/${C}/ws`));
+  const extra = await open(`/f/${C}/ws`);
+  await sleep(300);
+  ok(extra.closeCode === 4008 && extra.closeReason === 'room full', `13th connection to a room is closed with 4008 "room full" (got ${extra.closeCode})`);
+  crowd.forEach((w) => w.close());
 
   const short = await open('/f/SHORT/ws');
   ok(short.status === 404, 'too-short family code is refused');
@@ -87,7 +108,7 @@ const got = (ws, kind) => ws.inbox.some((m) => m.t === 'msg' && m.body?.kind ===
 
   ok((await fetch(`${BASE}/healthz`).catch(() => null))?.ok, 'relay is still up after the oversized message');
 
-  for (const ws of [mum, son2, otherSon, viewer, big]) ws.close();
+  for (const ws of [mum, son2, otherSon, mumB, viewer, big]) ws.close();
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
   process.exit(failed ? 1 : 0);
 })();

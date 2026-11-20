@@ -30,10 +30,17 @@ const LIMITS = {
   payload: 64 * 1024,   // biggest real message is a face embedding (~3 KB)
   perRoom: 12,          // 3 phones + monitors + reconnect overlap
   rooms: 500,
-  msgRate: 20,          // messages per second per IP (token bucket)...
+  // A whole family (and the laptop) often shares ONE public IP: hotspot, venue Wi-Fi, carrier NAT.
+  // So the real limits are per connection and per room; per IP is only a loose global cap.
+  msgRate: 20,          // messages per second per connection (token bucket)...
   msgBurst: 60,         // ...with this much burst
-  connPerMin: 30,       // new WebSocket connections per minute per IP
+  ipMsgRate: 200,       // loose cap per IP
+  ipMsgBurst: 400,
+  roomConnPerMin: 240,  // new connections per room per minute (all phones in reconnect loops ≈ 150/min)
+  ipConnPerMin: 600,    // loose cap per IP
 };
+// Close codes when refusing (both apps reconnect on anything except 4000, so never use 4000 here)
+const CLOSE = { rate: [4029, 'rate limited'], roomFull: [4008, 'room full'], relayFull: [4013, 'relay full'] };
 
 function newCode() {   // e.g. K7Q2-9XPD-M4TR: 12 chars from 32 symbols (60 bits), no 0/O/1/I mix-ups
   const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -73,32 +80,35 @@ function getRoom(code) {
   return r;
 }
 
-// ---------------------------------------------------------------- per-IP limits
-const ipState = new Map();   // ip -> { tokens, at, conns: [timestamps] }
+// ---------------------------------------------------------------- limits
 function ipOf(req) {
   // behind Fly/Railway the TCP peer is the proxy; the client IP is in a header
   const h = req.headers['fly-client-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   return h || req.socket.remoteAddress || '?';
 }
-function ipInfo(ip) {
-  let s = ipState.get(ip);
-  if (!s) ipState.set(ip, (s = { tokens: LIMITS.msgBurst, at: Date.now(), conns: [] }));
-  return s;
-}
-function allowConnection(ip) {
-  const s = ipInfo(ip), t = Date.now();
-  s.conns = s.conns.filter((x) => t - x < 60000);
-  if (s.conns.length >= LIMITS.connPerMin) return false;
-  s.conns.push(t);
+const bucket = (burst) => ({ tokens: burst, at: Date.now() });
+function take(b, rate, burst) {   // token bucket
+  const t = Date.now();
+  b.tokens = Math.min(burst, b.tokens + ((t - b.at) / 1000) * rate);
+  b.at = t;
+  if (b.tokens < 1) return false;
+  b.tokens -= 1;
   return true;
 }
-function allowMessage(ip) {
-  const s = ipInfo(ip), t = Date.now();
-  s.tokens = Math.min(LIMITS.msgBurst, s.tokens + ((t - s.at) / 1000) * LIMITS.msgRate);
-  s.at = t;
-  if (s.tokens < 1) return false;
-  s.tokens -= 1;
+const ipBuckets = new Map();   // ip -> message bucket
+const connLog = new Map();     // "room:<code>" / "ip:<addr>" -> timestamps of accepted connections (last minute)
+const recent = (key) => (connLog.get(key) || []).filter((x) => Date.now() - x < 60000);
+// Only ACCEPTED connections count, so refusals can't keep a family locked out.
+function allowConnection(room, ip) {
+  const r = recent(`room:${room}`), i = recent(`ip:${ip}`);
+  if (r.length >= LIMITS.roomConnPerMin || i.length >= LIMITS.ipConnPerMin) return false;
+  r.push(Date.now()); i.push(Date.now());
+  connLog.set(`room:${room}`, r); connLog.set(`ip:${ip}`, i);
   return true;
+}
+function allowMessage(ws) {
+  if (!ipBuckets.has(ws.ip)) ipBuckets.set(ws.ip, bucket(LIMITS.ipMsgBurst));
+  return take(ws.bucket, LIMITS.msgRate, LIMITS.msgBurst) && take(ipBuckets.get(ws.ip), LIMITS.ipMsgRate, LIMITS.ipMsgBurst);
 }
 function tokenOk(given) {
   if (!MONITOR_TOKEN) return true;   // laptop relay: the presenter's own machine
@@ -176,13 +186,19 @@ server.on('upgrade', (req, socket, head) => {
   try { where = parsePath(new URL(req.url, 'http://x').pathname); } catch { /* bad URL */ }
   if (!where || !where.room || where.rest !== '/ws') return refuse(socket, 404, 'Not Found');
   const ip = ipOf(req);
-  if (!allowConnection(ip)) return refuse(socket, 429, 'Too Many Requests');
-  if (!rooms.has(where.room) && rooms.size >= LIMITS.rooms) return refuse(socket, 503, 'Service Unavailable');
+  // refuse with a WebSocket close code + reason (not a bare HTTP error), so the apps' logs say why
+  const closeWith = ([code, reason]) => {
+    console.log(`[${ts()}] refused ${mask(where.room)} (${ip}): ${reason}`);
+    wss.handleUpgrade(req, socket, head, (ws) => { ws.on('error', () => {}); ws.close(code, reason); });
+  };
+  if (!rooms.has(where.room) && rooms.size >= LIMITS.rooms) return closeWith(CLOSE.relayFull);
+  if ((rooms.get(where.room)?.conns.size || 0) >= LIMITS.perRoom) return closeWith(CLOSE.roomFull);
+  if (!allowConnection(where.room, ip)) return closeWith(CLOSE.rate);
   const room = getRoom(where.room);
-  if (room.conns.size >= LIMITS.perRoom) return refuse(socket, 503, 'Service Unavailable');
   wss.handleUpgrade(req, socket, head, (ws) => {
     ws.room = room;
     ws.ip = ip;
+    ws.bucket = bucket(LIMITS.msgBurst);
     room.conns.add(ws);
     wss.emit('connection', ws, req);
   });
@@ -197,7 +213,14 @@ wss.on('connection', (ws) => {
   const { room, ip } = ws;
 
   ws.on('message', (raw) => {
-    if (!allowMessage(ip)) return;   // over the per-IP rate limit: drop
+    if (!allowMessage(ws)) {   // over the rate limit: drop, and say so (at most every 5 s)
+      if (Date.now() - (ws.warnedAt || 0) > 5000) {
+        ws.warnedAt = Date.now();
+        send(ws, { t: 'error', code: CLOSE.rate[0], reason: 'rate limited: messages dropped' });
+        console.log(`[${ts()}] rate limited ${ws.role || 'unknown'} in ${mask(room.code)} (${ip})`);
+      }
+      return;
+    }
     let m;
     try { m = JSON.parse(raw); } catch { return; }
 
@@ -261,7 +284,8 @@ setInterval(() => {
     try { ws.ping(); } catch { /* ignore */ }
   });
   const t = Date.now();
-  ipState.forEach((s, ip) => { if (t - s.at > 120000 && !s.conns.some((x) => t - x < 60000)) ipState.delete(ip); });
+  connLog.forEach((a, k) => { if (!a.some((x) => t - x < 60000)) connLog.delete(k); });
+  ipBuckets.forEach((b, ip) => { if (t - b.at > 120000) ipBuckets.delete(ip); });
 }, 4000);
 
 server.listen(PORT, '0.0.0.0', () => {

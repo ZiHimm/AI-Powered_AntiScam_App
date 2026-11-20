@@ -26,8 +26,8 @@ room with its own mum/son/daughter slots, so families never see each other.
 - **Make a code:** `node relay/server.js --new-code` prints one like `K7Q2-9XPD-M4TR`. The code is the only thing
   keeping strangers out of a family, so don't make one up by hand. Codes need at least 8 letters/digits and are not
   case-sensitive.
-- **Mum's phone (AntiScam Guard):** type the address starting with **`wss://`**. The app turns `https://` into `ws://`,
-  which a hosted relay won't accept.
+- **Mum's phone (AntiScam Guard):** use detector APK `c158247` or newer. Any of `https://<host>/f/<code>`,
+  `wss://<host>/f/<code>` or `<host>/f/<code>` works.
 - **Monitor / scammer console:** `https://<host>/f/<FAMILY-CODE>/monitor.html#token=<MONITOR_TOKEN>`.
   Without the token (the part after `#` never reaches the server logs) the monitor is read-only: you can watch
   the traffic, but the presenter and scammer buttons send nothing.
@@ -36,13 +36,21 @@ room with its own mum/son/daughter slots, so families never see each other.
 
 ### Limits
 
-| Limit | Value |
-| --- | --- |
-| Message size | 64 KB (the biggest real message, a face embedding, is about 3 KB) |
-| Connections per room | 12 (3 phones, monitors, reconnect overlap) |
-| Rooms | 500 |
-| Messages per IP | 20 per second, bursts up to 60 (extra messages are dropped) |
-| New connections per IP | 30 per minute |
+A whole family (and the laptop) often shares one public IP (hotspot, venue Wi-Fi, carrier NAT on mobile data), so
+the real limits are per connection and per room. Per IP is only a loose global cap.
+
+| Limit | Value | When it's hit |
+| --- | --- | --- |
+| Message size | 64 KB (a face embedding, the biggest real message, is ~3 KB) | connection closed with 1009 |
+| Messages per connection | 20/s, bursts up to 60 | extra messages dropped; the phone gets `{t:"error", code:4029}` |
+| Messages per IP | 200/s, bursts up to 400 | same |
+| New connections per room | 240 per minute (every device in a 1.5 s reconnect loop is ~150) | closed with **4029** "rate limited" |
+| New connections per IP | 600 per minute | closed with **4029** "rate limited" |
+| Connections in a room | 12 (3 phones, monitors, reconnect overlap) | closed with **4008** "room full" |
+| Rooms | 500 | closed with **4013** "relay full" |
+
+Only accepted connections count towards the connection limits, so refused reconnects can't keep a family locked out.
+None of these use 4000 (both apps stop reconnecting on 4000; it only means "replaced by a newer connection").
 
 `GET /healthz` returns `{"ok":true, "rooms":…, "phones":…, "monitorLocked":true}`. Check it before going on stage.
 
@@ -87,5 +95,8 @@ It uses throwaway room codes, so it never disturbs a real family. It checks:
 - rooms are separate, and messages stay inside their room;
 - the monitor token is enforced;
 - a newer phone replaces an older one (close code 4000);
+- a Mum in another room never replaces this room's Mum;
+- a flood from one phone is cut without affecting other phones on the same IP;
+- a full room refuses with close code 4008;
 - short codes and oversized messages are refused, and the relay survives them;
 - `/healthz` answers.
