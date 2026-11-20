@@ -1,14 +1,47 @@
-# Zero-Trust Video Verification · Hackathon Demo
+# AI-Powered Anti-Scam · Zero-Trust Video Call Protection
+
+Scammers now use deepfaked faces and voices on **WhatsApp and Instagram video calls** to pose as a family member and
+ask for money. This app runs quietly in the background on an elderly person's Android phone. When a video call
+starts, it scans the face on screen **on the device** and checks it against the faces of their family. If the caller
+looks like a family member, the app doesn't trust the video. It asks **the real family member, on their own phone**,
+*"Are you calling Mum right now?"*
+
+- **Yes:** the call is shown as verified.
+- **No:** Mum sees a full-screen **SCAM. Hang up.** warning and her guardians are alerted.
+- **No reply:** Mum is told to ask a family secret question: *no answer, no money*.
+
+We don't ask *"is this video fake?"* (a race deepfakes keep winning). We ask *"does the real person confirm they're calling?"*
+
+### How it works
+
+| Step | Android mechanism |
+| --- | --- |
+| Detect a video call in WhatsApp / Instagram | Accessibility Service watches the foreground app and call screen; Android 12+ also reports an active call |
+| See the caller's face | Accessibility screenshots (Android 11+), a few frames per second, processed in memory and never saved |
+| Who the caller claims to be | Caller name read from the call screen (e.g. "Son") |
+| Face match | On-device face detection and recognition (ML Kit / MediaPipe + a FaceNet-style model); only 128-number embeddings are stored |
+| Ask the real person / alert guardians | Firebase push, ECDSA P-256 signed alerts with single-use nonces, so forged or replayed alerts are rejected |
+| Family setup | Admin (guardian) creates a family and shares an invite link; members join, mark senior citizens and choose guardians |
+
+**Platform support:** Android (8 or newer for the app, 11 or newer for automatic screen scanning). iOS doesn't let
+apps see other apps' screens, so iPhone users get guardian alerts and a manual "verify this caller" flow only.
+
+**Status:** the Android app is in development in [`android/`](android/). The web demo below is the interactive concept
+demo: it runs the same verification logic in a browser, with three simulated phones.
+
+---
+
+## Web concept demo
 
 Browser demo with three phones on one page: **Mum** (receiver), **Son** (member/guardian) and **Daughter** (guardian).
 The face detection and matching are real and run in the browser with face-api.js. The push network between phones is
 simulated, but the nonces and ECDSA P-256 signatures are real (WebCrypto), so forged and replayed alerts genuinely fail.
 
-## Live demo
+### Live demo
 
 **https://zihimm.github.io/AI-Powered_AntiScam_App/** (open in Chrome or Safari and allow camera access)
 
-### Install it on your phone (PWA)
+#### Install it on your phone (PWA)
 - **iPhone (Safari):** open the link, tap **Share** and then **Add to Home Screen**.
 - **Android (Chrome):** open the link, tap **⋮** and then **Install app** (or **Add to Home screen**).
 
@@ -19,7 +52,7 @@ straight onto that view (e.g. give each judge a different link).
 It opens full-screen like a native app. After the first visit the app and face models (~13 MB) are cached,
 so it keeps working offline.
 
-## Run it locally
+### Run it locally
 
 ```bash
 ./start.sh            # serves http://localhost:8000 and opens it
@@ -29,7 +62,7 @@ so it keeps working offline.
 It must be served from `localhost`, not opened as `file://`, because the camera, WebCrypto and model loading all need it.
 Use Chrome. Everything (library + model weights, ~13 MB in `vendor/`) is local, so **no internet is needed at the venue**.
 
-## 2-minute demo script (Section 9 of the brief)
+### 2-minute demo script (Section 9 of the brief)
 
 | Step | Do this | What judges see |
 | --- | --- | --- |
@@ -45,7 +78,7 @@ Use Chrome. Everything (library + model weights, ~13 MB in `vendor/`) is local, 
 Other things to show: **"Son" (spoofed caller ID)** in panel 3 shows that verification ignores the phone number;
 untick **Son's phone online** for an offline phone; a teammate's face (or **Stranger**) gives State D, a normal call with no shield.
 
-### If something goes wrong on stage
+#### If something goes wrong on stage
 - **Webcam or lighting fails:** use the **Caller's face** buttons (Son / Daughter / Stranger / Blurry / Covered).
   They feed the same state machine, and the log marks them `[forced]`.
 - **Face doesn't match:** enrol 2–3 more webcam samples under the venue lighting, or raise *Match threshold* under
@@ -53,7 +86,7 @@ untick **Son's phone online** for an offline phone; a teammate's face (or **Stra
 - **Blurry warning fires on a sharp face:** lower *Sharpness threshold*. The live `sharp=` value is shown on Mum's screen.
 - Hide the side panel with **Hide controls** for a clean three-phone view. Shortcuts: `c` call, `e` end, `r` reset.
 
-## How it maps to the brief
+### How it maps to the brief
 
 | Brief | Where |
 | --- | --- |
@@ -68,7 +101,7 @@ untick **Son's phone online** for an offline phone; a teammate's face (or **Stra
 Simulated for the demo (show the real versions in the "production architecture" slide): push delivery (FCM),
 key exchange during family setup, biometric prompt, and capturing video from third-party call apps.
 
-## Files
+### Files
 
 ```
 index.html     layout: setup panel, 3 phones, log

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">AntiScam Guard</string>
+    <string name="service_label">AntiScam Guard: video call checker</string>
+    <string name="service_description">Checks the face on WhatsApp, Instagram, Messenger and Telegram video calls against your family\'s enrolled faces, on this phone only. Screenshots are processed in memory and never saved or uploaded. If a caller looks like a family member, you are warned so you can confirm it is really them.</string>
+</resources>

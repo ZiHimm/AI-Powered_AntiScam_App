@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.AntiScamGuard" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#3B82F6</item>
+        <item name="android:windowBackground">#0D1117</item>
+        <item name="android:statusBarColor">#0D1117</item>
+        <item name="android:navigationBarColor">#0D1117</item>
+    </style>
+</resources>

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:id="@+id/root"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🛡 AntiScam Guard"
+            android:textColor="#E6EDF3"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Checks the face on WhatsApp and Instagram video calls against your family. Everything stays on this phone."
+            android:textColor="#8B949E"
+            android:textSize="14sp" />
+
+        <!-- 1. Setup -->
+        <TextView style="@style/Section" android:text="1 · Turn on protection" />
+
+        <TextView android:id="@+id/status_service" style="@style/Body" />
+        <Button android:id="@+id/btn_service" style="@style/Btn" android:text="Open Accessibility settings" />
+
+        <TextView android:id="@+id/status_notif" style="@style/Body" />
+        <Button android:id="@+id/btn_notif" style="@style/Btn" android:text="Allow notifications" />
+
+        <TextView android:id="@+id/status_android" style="@style/Body" />
+
+        <!-- 2. Faces -->
+        <TextView style="@style/Section" android:text="2 · Family faces" />
+        <TextView
+            style="@style/Body"
+            android:text="Add 2–3 clear photos per person. Add yourself too (tick “This is me”) so your own camera preview is ignored. Only face embeddings are kept, never the photos." />
+
+        <LinearLayout
+            android:id="@+id/people"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <Button android:id="@+id/btn_add_person" style="@style/Btn" android:text="+ Add person" />
+
+        <!-- 3. Test -->
+        <TextView style="@style/Section" android:text="3 · Test without a call" />
+        <Button android:id="@+id/btn_test" style="@style/Btn" android:text="Check a photo" />
+        <TextView android:id="@+id/test_result" style="@style/Body" />
+
+        <TextView android:id="@+id/threshold_label" style="@style/Body" />
+        <SeekBar
+            android:id="@+id/threshold"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="80" />
+
+        <!-- 4. Log -->
+        <TextView style="@style/Section" android:text="Activity" />
+        <TextView
+            android:id="@+id/log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#0B0F14"
+            android:fontFamily="monospace"
+            android:padding="10dp"
+            android:textColor="#C9D1D9"
+            android:textIsSelectable="true"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>
