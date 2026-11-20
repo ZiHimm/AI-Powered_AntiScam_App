@@ -29,6 +29,14 @@ apps see other apps' screens, so iPhone users get guardian alerts and a manual "
 **Status:** the Android app is in development in [`android/`](android/). Download the latest build: **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)**. The web demo below is the interactive concept
 demo: it runs the same verification logic in a browser, with three simulated phones.
 
+### What's in this repo
+
+| Folder | What it is | Use it for |
+| --- | --- | --- |
+| [`android/`](android/) | **Native Android app**: detects real WhatsApp/Instagram video calls in the background and checks the face | Proving the detection is real |
+| [`mobile/`](mobile/) | **3-phone family demo**: the same app on Mum's, Son's and Daughter's phones, linked by a laptop relay, with a projector monitor and scammer console | The live "Are you calling Mum?" demo on real phones |
+| root (`index.html`, `app.js`…) | **Web simulation**: all three phones on one page, [live on GitHub Pages](https://zihimm.github.io/AI-Powered_AntiScam_App/) | Explaining the flow, and backup if phones or Wi-Fi fail |
+
 ---
 
 ## Web concept demo
