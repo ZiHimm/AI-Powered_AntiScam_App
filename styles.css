@@ -259,3 +259,45 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   :root { --phone-w: 270px; --phone-h: 560px; }
   .layout { grid-template-columns: 300px 1fr; }
 }
+
+/* ---------- phone-sized screens: one view at a time (tabs) ---------- */
+.mobile-tabs { display: none; }
+@media (max-width: 760px) {
+  .topbar { padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
+  .brand p, #btn-toggle-panel { display: none; }
+  .brand h1 { font-size: 15px; }
+  .logo { font-size: 22px; }
+  html, body { overflow-x: hidden; }
+  .topbar { gap: 8px; }
+  .brand { min-width: 0; }
+  .topbar-right { min-width: 0; flex-shrink: 1; }
+  .topbar .pill { font-size: 10.5px; padding: 3px 8px; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+
+  .mobile-tabs { display: flex; position: sticky; top: 0; z-index: 100; background: #0b0f14;
+    border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .mobile-tabs button { flex: 1 1 auto; position: relative; padding: 10px 4px; font: inherit; font-size: 12px; white-space: nowrap;
+    color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+  .mobile-tabs button.active { color: var(--text); border-bottom-color: var(--blue); font-weight: 600; }
+  .mobile-tabs button.has-new::after { content: ""; position: absolute; top: 7px; right: 4px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .layout, .layout.no-panel { display: block; min-height: 0; }
+  .panel { position: static; max-height: none; border-right: 0; }
+  .stage { padding: 10px; gap: 10px; }
+  .phones { display: block; }
+
+  /* show only the selected view */
+  body:not([data-view="controls"]) .panel { display: none; }
+  body[data-view="controls"] .layout.no-panel .panel { display: block; }
+  body[data-view="controls"] .stage { display: none; }
+  .phone-col { display: none; }
+  body[data-view="mum"] .phone-col[data-view="mum"],
+  body[data-view="son"] .phone-col[data-view="son"],
+  body[data-view="daughter"] .phone-col[data-view="daughter"] { display: flex; }
+  body:not([data-view="log"]) .logwrap { display: none; }
+
+  /* the phone mock-up becomes the real screen */
+  .phone { width: 100%; height: calc(100dvh - 150px); min-height: 480px; border-width: 0; border-radius: 18px; box-shadow: none; }
+  .phone::before { display: none; }
+  .phone.urgent-ring { box-shadow: 0 0 0 3px var(--red), 0 0 24px var(--red); }
+}

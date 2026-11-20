@@ -1027,9 +1027,49 @@ function resetDemo() {
   logSep('Demo reset');
 }
 
+// ---------------------------------------------------------------- phone-sized screens: tabs
+// CSS (max-width: 760px) shows one view at a time based on body[data-view]. Desktop ignores all this.
+function setupMobileTabs() {
+  const tabs = $('#mobile-tabs');
+  const tabFor = v => tabs.querySelector(`[data-view="${v}"]`);
+  const show = (v) => {
+    document.body.dataset.view = v;
+    tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+    tabFor(v).classList.remove('has-new');
+    window.scrollTo(0, 0);
+  };
+  tabs.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) show(b.dataset.view); });
+
+  // On a phone, starting a call from Controls jumps straight to Mum's screen.
+  $('#btn-call').addEventListener('click', () => {
+    if (matchMedia('(max-width: 760px)').matches) show('mum');
+  });
+
+  // Tag each phone column and put a red dot on its tab when something new appears there
+  // (armed after start-up so the initial render doesn't count as "new").
+  let armed = false;
+  setTimeout(() => { armed = true; }, 1500);
+  for (const who of ['mum', 'son', 'daughter']) {
+    const phone = $(`#phone-${who}`);
+    phone.closest('.phone-col').dataset.view = who;
+    new MutationObserver(muts => {
+      if (!armed || document.body.dataset.view === who) return;
+      // ignore clock ticks and the live face-debug readout
+      const real = muts.some(m => !m.target.closest('.statusbar, .clock, .clock-big, .home-date, #debug'));
+      if (real) tabFor(who).classList.add('has-new');
+    }).observe(phone, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  }
+  // e.g. …/#son opens straight onto Son's phone (handy: hand each judge a different link/QR)
+  const fromHash = () => { const v = location.hash.slice(1); if (tabFor(v)) show(v); };
+  window.addEventListener('hashchange', fromHash);
+  show('mum');
+  fromHash();
+}
+
 // ---------------------------------------------------------------- boot
 (async function boot() {
   wire();
+  setupMobileTabs();
   tickClocks();
   setInterval(tickClocks, 10000);
   syncSettingsUI();

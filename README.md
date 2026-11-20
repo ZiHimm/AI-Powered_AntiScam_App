@@ -12,6 +12,10 @@ simulated, but the nonces and ECDSA P-256 signatures are real (WebCrypto), so fo
 - **iPhone (Safari):** open the link, tap **Share** and then **Add to Home Screen**.
 - **Android (Chrome):** open the link, tap **⋮** and then **Install app** (or **Add to Home screen**).
 
+On a phone the page shows one screen at a time with tabs: **Mum · Son · Daughter · Controls · Log**.
+A red dot on a tab means that phone just received something. Add `#son`, `#daughter` or `#controls` to the URL to open
+straight onto that view (e.g. give each judge a different link).
+
 It opens full-screen like a native app. After the first visit the app and face models (~13 MB) are cached,
 so it keeps working offline.
 
