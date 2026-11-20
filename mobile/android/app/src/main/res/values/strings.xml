@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Family Verify</string>
+    <string name="title_activity_main">Family Verify</string>
+    <string name="package_name">com.familyverify.demo</string>
+    <string name="custom_url_scheme">com.familyverify.demo</string>
+</resources>

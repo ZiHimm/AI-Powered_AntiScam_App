@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1e3a8a">
+  <title>Family Verify</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+
+<!-- ============ FIRST LAUNCH: pick who this phone belongs to ============ -->
+<section id="setup" class="setup" hidden>
+  <div class="setup-logo">🛡</div>
+  <h1>Family Verify</h1>
+  <p class="setup-sub">Whose phone is this?</p>
+  <div class="role-pick">
+    <button data-role="mum"><span>👵</span>Mum<small>Receives calls · protected</small></button>
+    <button data-role="son"><span>👦</span>Son<small>Family member</small></button>
+    <button data-role="daughter"><span>👩</span>Daughter<small>Family member</small></button>
+  </div>
+  <label class="field setup-relay">Family relay address (the laptop)
+    <input type="text" id="setup-relay" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url">
+  </label>
+  <p class="setup-hint">All phones must be on the same Wi-Fi or the laptop's hotspot.</p>
+</section>
+
+<!-- ============ MUM ============ -->
+<div class="phone" id="phone-mum" hidden>
+  <div class="screen">
+    <div id="mum-home" class="home">
+      <div class="home-time clock-big"></div>
+      <div class="home-date"></div>
+      <div class="home-shield">🛡 Protected by Family Verify</div>
+      <div id="mum-home-info" class="home-info"></div>
+      <div id="family-status" class="family-status"></div>
+      <div class="home-actions">
+        <button id="btn-call" class="big-btn">📞 Start demo video call</button>
+        <button id="btn-protect" class="big-btn alt" hidden>🛡 Protect WhatsApp calls</button>
+      </div>
+    </div>
+    <div id="mum-call" class="call" hidden>
+      <video id="cam" autoplay muted playsinline></video>
+      <canvas id="overlay"></canvas>
+      <div id="no-cam" class="no-cam" hidden>👤<small>Camera off. Use "Caller's face" in ⚙ settings</small></div>
+      <div class="call-top">
+        <div class="caller-id" id="caller-id"></div>
+        <div class="call-sub" id="call-sub"></div>
+      </div>
+      <div id="shield" class="shield-wrap"></div>
+      <div id="debug" class="debug"></div>
+      <div class="call-controls">
+        <button class="round red" data-action="hangup" title="Hang up">✆</button>
+        <button class="round flip" data-action="flip" title="Switch camera">⟲</button>
+        <button class="round green" data-action="answer" id="btn-answer" title="Answer">✆</button>
+      </div>
+    </div>
+    <div id="mum-full" class="fullscreen" hidden></div>
+    <div id="mum-toast" class="toast" hidden></div>
+    <div id="mum-ended" class="ended" hidden>Call ended</div>
+  </div>
+</div>
+
+<!-- ============ SON / DAUGHTER ============ -->
+<div class="phone member" id="phone-member" hidden>
+  <div class="screen">
+    <div class="lock">
+      <div class="clock-big"></div>
+      <div class="home-date"></div>
+      <div class="member-who"><span id="member-name"></span> <small class="role" id="member-role"></small></div>
+      <div id="member-status" class="member-status"></div>
+    </div>
+    <div class="notifs"></div>
+    <div class="offline-mask" hidden>📵<span>Not connected</span><small>Reconnecting to the family relay…</small></div>
+    <div class="bio" hidden><div class="bio-icon">👆</div><div class="bio-msg">Confirm with fingerprint</div></div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS DRAWER ============ -->
+<button id="btn-menu" class="menu-btn" hidden title="Settings">⚙</button>
+<div id="drawer" class="drawer" hidden>
+  <div class="drawer-head">
+    <b id="drawer-title">Settings</b>
+    <button id="btn-close-drawer" class="btn small">Close ✕</button>
+  </div>
+  <div class="drawer-body">
+
+    <section class="box">
+      <h3>📡 Connection</h3>
+      <div class="pills"><span id="net-status" class="pill pill-wait">Connecting…</span> <span id="model-status" class="pill pill-wait">Loading face models…</span></div>
+      <label class="field">Relay address
+        <input type="text" id="relay-url" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url">
+      </label>
+      <div class="btn-row">
+        <button id="btn-relay-save" class="btn small">Save &amp; reconnect</button>
+        <button id="btn-change-role" class="btn small ghost">Change role</button>
+      </div>
+      <div class="hint" id="key-info"></div>
+      <button id="btn-forget-pins" class="btn small ghost">Forget paired family keys</button>
+    </section>
+
+    <!-- member only -->
+    <section class="box member-only">
+      <h3>🙂 Share my face with Mum</h3>
+      <p class="hint">Your phone turns your face into 128 numbers and sends only those (signed) to Mum's phone. The photo never leaves your phone.</p>
+      <button id="btn-share-face" class="btn primary">🎥 Scan my face &amp; send</button>
+      <div id="share-msg" class="hint"></div>
+    </section>
+
+    <!-- mum only -->
+    <section class="box mum-only">
+      <h3><span class="num">1</span> Family faces</h3>
+      <p class="hint">Only 128-number embeddings are kept on this phone, never the photo. Son/Daughter can also send theirs from their own phone.</p>
+      <div class="enrol-row" data-id="son">
+        <div class="enrol-name">👦 Son <small class="enrol-count"></small></div>
+        <div class="enrol-actions">
+          <label class="btn small">📷 Photo<input type="file" accept="image/*" multiple hidden></label>
+          <button class="btn small" data-enrol="cam">🎥 Camera</button>
+          <button class="btn small ghost" data-enrol="clear" title="Forget this face">✕</button>
+        </div>
+      </div>
+      <div class="enrol-row" data-id="daughter">
+        <div class="enrol-name">👩 Daughter <small class="enrol-count"></small></div>
+        <div class="enrol-actions">
+          <label class="btn small">📷 Photo<input type="file" accept="image/*" multiple hidden></label>
+          <button class="btn small" data-enrol="cam">🎥 Camera</button>
+          <button class="btn small ghost" data-enrol="clear" title="Forget this face">✕</button>
+        </div>
+      </div>
+      <div id="enrol-msg" class="hint"></div>
+    </section>
+
+    <section class="box mum-only">
+      <h3><span class="num">2</span> Guardians &amp; safety</h3>
+      <label class="check"><input type="checkbox" id="g-son"> 👦 Son is a guardian</label>
+      <label class="check"><input type="checkbox" id="g-daughter"> 👩 Daughter is a guardian</label>
+      <label class="field">Primary guardian
+        <select id="g-primary">
+          <option value="">None</option>
+          <option value="son">Son</option>
+          <option value="daughter">Daughter</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="elder-consent"> Mum consented to Elder Mode</label>
+      <label class="check" id="elder-switch"><input type="checkbox" id="elder-toggle"> <b>Elder Mode</b> (big screens, guardians alerted)</label>
+      <label class="field">Family secret question
+        <input type="text" id="secret-q">
+      </label>
+      <label class="field">Reply window: <b id="timeout-val"></b>s
+        <input type="range" id="timeout" min="5" max="30" step="1">
+      </label>
+      <label class="field">Caller ID shown (demo call)
+        <select id="caller-id-sel">
+          <option value="unknown">Unknown number</option>
+          <option value="spoofed">"Son" (spoofed caller ID)</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="notify-blur"> Tell guardians about blurry calls too</label>
+    </section>
+
+    <section class="box mum-only demo">
+      <h3>🎬 Demo controls</h3>
+      <div class="btn-row">
+        <button id="btn-call2" class="btn primary">📞 Demo call</button>
+        <button id="btn-end" class="btn">End call</button>
+        <button id="btn-reset" class="btn ghost">Reset</button>
+      </div>
+      <label class="field">Camera for the demo call
+        <select id="cam-facing">
+          <option value="user">Front (caller looks at Mum's phone)</option>
+          <option value="environment">Back (point at a screen / person)</option>
+        </select>
+      </label>
+      <div class="sub">Caller's face <small>(backup if camera or lighting fails)</small></div>
+      <div class="seg" id="force">
+        <label><input type="radio" name="force" value="auto" checked><span>Camera</span></label>
+        <label><input type="radio" name="force" value="son"><span>Son</span></label>
+        <label><input type="radio" name="force" value="daughter"><span>Daughter</span></label>
+        <label><input type="radio" name="force" value="unknown"><span>Stranger</span></label>
+        <label><input type="radio" name="force" value="blurry"><span>Blurry</span></label>
+        <label><input type="radio" name="force" value="noface"><span>Covered</span></label>
+      </div>
+      <button id="btn-expire" class="btn small">⏩ Skip to "no reply"</button>
+      <details class="tuning">
+        <summary>Tuning &amp; debug</summary>
+        <label class="field">Match threshold (lower = stricter): <b id="match-val"></b>
+          <input type="range" id="match-th" min="0.30" max="0.70" step="0.01">
+        </label>
+        <label class="field">Sharpness threshold (higher = stricter): <b id="blur-val"></b>
+          <input type="range" id="blur-th" min="0" max="300" step="5">
+        </label>
+        <label class="check"><input type="checkbox" id="show-debug"> Show face debug on the call screen</label>
+        <button id="btn-wipe" class="btn small ghost">Forget everything (faces + settings)</button>
+      </details>
+    </section>
+
+    <section class="box">
+      <h3>📜 This phone's log</h3>
+      <ol id="log"></ol>
+    </section>
+  </div>
+</div>
+
+<div id="enrol-cam" class="enrol-cam" hidden>
+  <video id="enrol-video" muted playsinline></video>
+  <span id="enrol-cam-msg">Look at the camera…</span>
+</div>
+
+<script src="vendor/face-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

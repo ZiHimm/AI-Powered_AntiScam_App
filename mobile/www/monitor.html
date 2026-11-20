@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Family Verify · Network monitor</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { overflow: auto; }
+    .mon { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px; height: calc(100vh - 66px); }
+    .side { overflow-y: auto; }
+    .devs { display: flex; flex-direction: column; gap: 8px; }
+    .dev { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; background: #0f141a; font-size: 16px; }
+    .dev .st { font-size: 13px; }
+    .dev.on .st { color: #4ade80; } .dev.off .st { color: #f87171; }
+    .dev small { display: block; font: 11px ui-monospace, monospace; }
+    .logwrap { max-height: none; height: 100%; }
+    #log { font-size: 15px; }
+    #log li { padding: 4px 14px; }
+    .who { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; flex-shrink: 0; min-width: 62px; text-align: center; }
+    .who-mum { background: #be185d; color: #fff; } .who-son { background: #0369a1; color: #fff; }
+    .who-daughter { background: #7c3aed; color: #fff; } .who-relay { background: #334155; color: #fff; }
+    .who-scammer { background: #7f1d1d; color: #fff; }
+    .btn { font-size: 14px; }
+    .btn-row .btn { flex: 1; justify-content: center; }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🛡</span>
+    <div>
+      <h1>Family Verify · live network monitor</h1>
+      <p>Everything that leaves a phone. <em>No video, audio or faces ever cross the network.</em></p>
+    </div>
+  </div>
+  <div class="topbar-right"><span id="conn" class="pill pill-wait">Connecting…</span></div>
+</header>
+<main class="mon">
+  <aside class="side">
+    <section class="box">
+      <h3>📱 Family phones</h3>
+      <div class="devs" id="devs"></div>
+    </section>
+    <section class="box demo">
+      <h3>🎬 Presenter</h3>
+      <div class="btn-row">
+        <button class="btn primary" data-demo="call">📞 Demo call on Mum</button>
+        <button class="btn" data-demo="end">End call</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" data-demo="expire">⏩ Skip to "no reply"</button>
+        <button class="btn ghost" data-demo="reset">Reset all phones</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn small" data-demo="elder-on">Elder Mode on</button>
+        <button class="btn small" data-demo="elder-off">Standard Mode</button>
+      </div>
+    </section>
+    <section class="box">
+      <h3>😈 Scammer console</h3>
+      <p class="hint">The scammer is on the network: they can send messages that claim to come from Mum, and they can capture and re-send real alerts. They do <b>not</b> have Mum's private key.</p>
+      <div class="btn-row">
+        <button id="btn-forge" class="btn danger">😈 Forged "Mum" alert</button>
+        <button id="btn-replay" class="btn danger">🔁 Replay captured alert</button>
+      </div>
+      <div class="hint" id="captured">No urgent alert captured yet.</div>
+    </section>
+    <label class="check"><input type="checkbox" id="show-raw"> Show raw relay traffic</label>
+  </aside>
+  <div class="logwrap">
+    <div class="log-head">
+      <span><b>Network &amp; security log</b> <small>all phones, newest first</small></span>
+      <button id="btn-clear" class="btn small ghost">Clear</button>
+    </div>
+    <ol id="log"></ol>
+  </div>
+</main>
+<script src="monitor.js"></script>
+</body>
+</html>
