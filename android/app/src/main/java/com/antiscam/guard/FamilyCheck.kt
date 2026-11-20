@@ -27,6 +27,7 @@ class FamilyCheck(
         var status = "scanning"          // scanning | verifying | A | B | C | secret-ok | secret-fail | warned
         var target: String? = null
         var nonce: String? = null
+        var expiredNonce: String? = null  // the request that timed out: a late signed "No" still counts
         var expires = 0L
         val notified = linkedSetOf<String>()
     }
@@ -136,12 +137,30 @@ class FamilyCheck(
             }
             "face" -> FamilyLink.log("info", "${FamilyLink.nameOf(from)} shared a face from the family app. " +
                 "This detector uses its own model: enrol ${FamilyLink.nameOf(from)} with 📷 selfies here instead.")
-            "demo" -> if (body.optString("action") in setOf("reset", "end")) { overlay.hide(); end() }
+            "demo" -> when (body.optString("action")) {
+                "reset", "end" -> { overlay.hide(); end() }
+                "expire" -> call?.let { c ->  // monitor: "Skip to no reply"
+                    if (c.status == "verifying") { FamilyLink.log("info", "Presenter skipped to \"no reply\"."); onReply(c.target!!, c.nonce!!, "timeout") }
+                }
+            }
         }
     }
 
     private fun onReply(role: String, nonce: String, answer: String) {
         val c = call
+        // Late answer to the request that just expired (same call, same nonce, signed by the right phone)
+        if (c != null && c.expiredNonce == nonce && c.target == role && answer != "timeout") {
+            val who = FamilyLink.nameOf(role)
+            if (answer == "no") {
+                c.expiredNonce = null // single use
+                main.removeCallbacksAndMessages(null)
+                FamilyLink.log("info", "🔴 Late reply: $who says it is NOT them. Switching to SCAM.")
+                scam(c, role)
+            } else {
+                FamilyLink.log("info", "$who confirmed after the ${FamilyLink.replySeconds}s window. Too late to count: keep using the secret question.")
+            }
+            return
+        }
         if (c == null || c.status != "verifying" || c.nonce != nonce || c.target != role) {
             if (answer != "timeout") FamilyLink.log("attack", "✗ Ignored a reply from ${FamilyLink.nameOf(role)}: it doesn't match an open request (stale or replayed)")
             return
@@ -157,19 +176,25 @@ class FamilyCheck(
                 alertGuardians(c, "log", "Mum took a verified call from $who", about = role)
             }
             "no" -> {
-                c.status = "B"
                 FamilyLink.log("info", "🔴 $who says it is NOT them. Scam call.")
-                alertGuardians(c, "urgent", "🚨 Someone pretending to be $who is video-calling Mum",
-                    "$who confirmed it's NOT them. Mum has been told to hang up.", about = role)
-                overlay.show(Level.DANGER, "⛔ SCAM. Hang up.",
-                    "The real $who says this is NOT them. Don't send money or share codes.${toldText(c)}",
-                    listOf(Action("HANG UP", Style.BAD) { hangUp() }, Action("Dismiss") { overlay.hide() }))
+                scam(c, role)
             }
             else -> {
-                role.let { FamilyLink.sendTo(it, JSONObject().put("kind", "expire-ping").put("nonce", nonce)) }
+                FamilyLink.sendTo(role, JSONObject().put("kind", "expire-ping").put("nonce", nonce))
+                c.expiredNonce = nonce
                 noReply(c, offline = false)
             }
         }
+    }
+
+    private fun scam(c: Call, role: String) {
+        val who = FamilyLink.nameOf(role)
+        c.status = "B"
+        alertGuardians(c, "urgent", "🚨 Someone pretending to be $who is video-calling Mum",
+            "$who confirmed it's NOT them. Mum has been told to hang up.", about = role)
+        overlay.show(Level.DANGER, "⛔ SCAM. Hang up.",
+            "The real $who says this is NOT them. Don't send money or share codes.${toldText(c)}",
+            listOf(Action("HANG UP", Style.BAD) { hangUp() }, Action("Dismiss") { overlay.hide() }))
     }
 
     /** No answer in time, or their phone is offline: fall back to the family secret question. */

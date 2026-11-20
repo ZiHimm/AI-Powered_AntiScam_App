@@ -22,6 +22,8 @@ Son's and Daughter's phones run the `mobile/` app. When a WhatsApp call's face l
 2. Mum sees **"Checking with Son…"** over the call, with a countdown.
 3. Son's signed **Yes** → 🟢 *"This is really Son"*. **No** → 🔴 *"SCAM. Hang up."* No reply / Son offline →
    🟠 the family secret question, with **Answered right / Couldn't answer** buttons.
+   A **late signed "No"** (after the 15 s window, same call) still switches Mum to SCAM. It's accepted once; a late
+   "Yes" doesn't override the secret question. The monitor's **Skip to "no reply"** button ends the countdown.
 4. In Elder Mode, guardians get signed alerts and can reply with **Call Mum now** or a signed **Tell Mum to hang up**,
    which appears over Mum's call.
 
