@@ -189,7 +189,12 @@ class FamilyActivity : AppCompatActivity() {
                 box.addView(text(c.title, 21f, white, bold = true, top = 4))
                 if (c.body.isNotEmpty()) box.addView(text(c.body, 16f, white, top = 4))
                 if (urgent) box.addView(row(
-                    bigButton(if (c.called) "📞 Calling ${c.calleeName}…" else "📞 Call ${c.calleeName} now", 0xFF16A34A.toInt(), enabled = !c.called) { MemberHub.callCallee(c) },
+                    bigButton(if (c.called) "📞 Calling ${c.calleeName}…" else "📞 Call ${c.calleeName} now", 0xFF16A34A.toInt(), enabled = !c.called) {
+                        MemberHub.callCallee(c)
+                        FamilyLink.members[c.from]?.phone?.takeIf { it.isNotBlank() }?.let { n ->
+                            startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$n")))
+                        }
+                    },
                     bigButton(if (c.warned) "✓ Sent to ${c.calleeName}" else "⚠️ Tell ${c.calleeName} to hang up", 0xFFDC2626.toInt(), enabled = !c.warned) { MemberHub.warnCallee(c) }))
                 c.shared.forEach { box.addView(text(it, 15f, white, top = 6)) }
                 box.addView(text("✔ Signed by ${c.calleeName}'s phone · ${c.sig.take(8)}…", 13f, 0xFF86EFAC.toInt(), top = 8))

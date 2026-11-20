@@ -58,6 +58,7 @@ object FamilyLink {
         var protect = false
         var v2 = false              // speaks the step-2 protocol (sent us a signed profile)
         var guardians: List<String> = emptyList()
+        var phone = ""
     }
     val members = linkedMapOf<String, Member>()
 
@@ -79,7 +80,7 @@ object FamilyLink {
 
     /** Senior citizen: if a scammer targets me, my guardians get signed alerts (was "Elder Mode"). */
     var senior: Boolean
-        get() = prefs.getBoolean("elder", myRole == null || myRole == "mum")
+        get() = prefs.getBoolean("elder", myRole == "mum")   // new users: not a senior unless they say so
         set(v) { prefs.edit().putBoolean("elder", v).apply(); profileChanged() }
     var elderMode: Boolean
         get() = senior
@@ -95,6 +96,20 @@ object FamilyLink {
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", false)
         set(v) = prefs.edit().putBoolean("enabled", v).apply()
+    /** My phone number (optional): lets family tap "Call <me> now" to actually dial. */
+    var myPhone: String
+        get() = prefs.getString("phone", "") ?: ""
+        set(v) { prefs.edit().putString("phone", v.trim()).apply(); profileChanged() }
+    var familyName: String
+        get() = prefs.getString("family_name", "") ?: ""
+        set(v) = prefs.edit().putString("family_name", v.trim()).apply()
+    /** I created this family (shown in the UI; anyone in the family can still invite). */
+    var isAdmin: Boolean
+        get() = prefs.getBoolean("admin", false)
+        set(v) = prefs.edit().putBoolean("admin", v).apply()
+    /** The family code from the relay address (…/f/CODE), if any. */
+    val familyCode: String? get() = Regex("/f/([^/]+)").find(relay)?.groupValues?.get(1)
+
     var secretQuestion: String
         get() = prefs.getString("secret", null) ?: "What did we eat after Grandma's 70th birthday?"
         set(v) = prefs.edit().putString("secret", v).apply()
@@ -232,7 +247,7 @@ object FamilyLink {
 
     // ---------------------------------------------------------------- profiles (step 2): name, senior, guardians
     private fun profileJson() = JSONObject().put("type", "profile").put("v", 2).put("from", me).put("name", myName)
-        .put("senior", senior).put("protect", protect).put("guardians", org.json.JSONArray(guardians()))
+        .put("senior", senior).put("protect", protect).put("guardians", org.json.JSONArray(guardians())).put("phone", myPhone)
         .put("ts", System.currentTimeMillis())
 
     private fun sendProfile(to: String) { if (connected) sendTo(to, JSONObject().put("kind", "profile").put("env", DeviceKey.sign(profileJson()))) }
@@ -253,6 +268,7 @@ object FamilyLink {
         val first = !m.v2
         m.name = p.optString("name", m.name); m.senior = p.optBoolean("senior"); m.protect = p.optBoolean("protect")
         m.v2 = true
+        m.phone = p.optString("phone")
         m.guardians = p.optJSONArray("guardians")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
         if (first) {
             sendProfile(from)                // make sure they know us too
@@ -280,6 +296,36 @@ object FamilyLink {
     }
 
     fun pinOf(role: String): String? = prefs.getString("pin_$role", null)
+
+    private fun clearPins() {
+        val all = prefs.all.keys.filter { it.startsWith("pin_") }
+        prefs.edit().apply { all.forEach { remove(it) } }.apply()
+        peerKeys.clear(); keyMismatch.clear(); members.clear(); online.clear()
+    }
+
+    // ---------------------------------------------------------------- create / join a family (QR invite)
+    /** An invite to this phone's current family (anyone in the family can invite; the anchor key is mine). */
+    fun currentInvite(): Invite? {
+        val code = familyCode ?: return null
+        return Invite(Invite.baseOf(relay), code, familyName, me, myName, DeviceKey.fingerprint)
+    }
+
+    /** Admin: start a new family on [relayBase] with a fresh random family code. Old family keys are forgotten. */
+    fun createFamily(relayBase: String, name: String): Invite {
+        clearPins()
+        relay = "${Invite.baseOf(relayBase)}/f/${Invite.newCode()}"
+        familyName = name; isAdmin = true; enabled = true
+        LiveLog.add("Created the family \"$name\". Invite others with the QR code.")
+        return currentInvite()!!
+    }
+
+    /** Join from an invite: the inviter's key is pinned from the QR, so it's trusted from the start. */
+    fun joinFamily(inv: Invite) {
+        clearPins()
+        if (inv.inviterId.isNotEmpty() && inv.inviterKey.isNotEmpty()) prefs.edit().putString("pin_${inv.inviterId}", inv.inviterKey).apply()
+        relay = inv.relayRoom; familyName = inv.familyName; isAdmin = false; enabled = true
+        LiveLog.add("Joined \"${inv.familyName}\", invited by ${inv.inviterName} (key ${inv.inviterKey} pinned from the invite).")
+    }
 
     fun forgetPins() {
         prefs.edit().apply { (ROLES + members.keys).forEach { remove("pin_$it") } }.apply()

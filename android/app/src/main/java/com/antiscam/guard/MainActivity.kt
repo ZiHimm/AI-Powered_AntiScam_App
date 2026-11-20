@@ -62,6 +62,10 @@ class MainActivity : AppCompatActivity() {
             .putExtra(EnrolActivity.EXTRA_NAME, name)
             .putExtra(EnrolActivity.EXTRA_OWNER, isOwner))
 
+    private val scanInvite = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        r.data?.getStringExtra("invite")?.let { Invite.parse(it) }?.let { confirmJoin(it) }
+    }
+
     private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +73,11 @@ class MainActivity : AppCompatActivity() {
         FamilyLink.init(this)
         setContentView(R.layout.activity_main)
         MemberHub.init(this); FamilyLink.listeners.add(MemberHub)
-        if (FamilyLink.myRole == null) main.post { askWhoAmI() }
+        val linkInvite = intent?.data?.toString()?.let { Invite.parse(it) }
+        when {
+            linkInvite != null -> main.post { confirmJoin(linkInvite) }       // opened from an invite link
+            FamilyLink.myRole == null -> main.post { askWhoAmI() }
+        }
         engine = FaceEngine.get(this)
         Notifier.ensureChannels(this)
 
@@ -150,20 +158,24 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------ one app: who am I in the family?
 
     /** First launch (and "Change my name / setup"): name → member id, senior citizen?, check my calls? */
+    private var seniorBox: CheckBox? = null
+
     private fun askWhoAmI() {
         val pad = (20 * resources.displayMetrics.density).toInt()
         val name = EditText(this).apply { hint = "Your name in the family (e.g. Mum, Dad, Aisha)"; setText(FamilyLink.myRole?.let { FamilyLink.myName } ?: "") }
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf("Mum", "Dad", "Son", "Daughter").forEach { n ->
-            chips.addView(Button(this).apply { text = n; isAllCaps = false; setOnClickListener { name.setText(n) } },
+            chips.addView(Button(this).apply { text = n; isAllCaps = false; setOnClickListener { name.setText(n); if (n == "Mum") seniorBox?.isChecked = true } },
                 LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
+        val phone = EditText(this).apply { hint = "My phone number (optional, so family can call me)"; inputType = android.text.InputType.TYPE_CLASS_PHONE; setText(FamilyLink.myPhone) }
         val senior = CheckBox(this).apply { text = "I'm a senior citizen: alert my guardians if a scammer targets me"; isChecked = FamilyLink.senior }
+        seniorBox = senior
         val protect = CheckBox(this).apply { text = "Check my incoming video calls on this phone"; isChecked = FamilyLink.protect }
         senior.setOnCheckedChangeListener { _, c -> if (c) protect.isChecked = true }   // seniors are protected by default
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0)
-            addView(name); addView(chips); addView(senior); addView(protect)
+            addView(name); addView(chips); addView(phone); addView(senior); addView(protect)
             addView(TextView(context).apply { text = "Use the same names your family uses (Mum, Son…) so everyone's phone matches."; textSize = 13f; setPadding(0, pad / 2, 0, 0) })
         }
         AlertDialog.Builder(this).setTitle("Who are you in the family?").setView(form).setCancelable(FamilyLink.myRole != null)
@@ -173,10 +185,60 @@ class MainActivity : AppCompatActivity() {
                 if (id.isEmpty()) { toast("Enter your name"); main.post { askWhoAmI() }; return@setPositiveButton }
                 val changed = FamilyLink.myRole != id
                 FamilyLink.myName = n; FamilyLink.myRole = id
-                FamilyLink.senior = senior.isChecked; FamilyLink.protect = protect.isChecked
-                if (changed && FamilyLink.enabled) { FamilyLink.restart() }
+                FamilyLink.senior = senior.isChecked; FamilyLink.protect = protect.isChecked; FamilyLink.myPhone = phone.text.toString()
+                if (FamilyLink.enabled && (changed || !FamilyLink.connected)) { FamilyService.start(this); FamilyLink.restart() }
                 refresh()
+                if (!FamilyLink.enabled) main.post { askFamilySetup() }
             }.show()
+    }
+
+    // ------------------------------------------------------------------ create / join a family
+
+    private fun askFamilySetup() {
+        AlertDialog.Builder(this).setTitle("Your family")
+            .setItems(arrayOf("👑  Create a new family (I'll invite the others)", "📷  Join my family (scan their QR code)", "Later")) { _, i ->
+                when (i) { 0 -> askCreateFamily(); 1 -> scanInvite.launch(Intent(this, ScanActivity::class.java)) }
+            }.show()
+    }
+
+    private fun askCreateFamily() {
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val fname = EditText(this).apply { hint = "Family name, e.g. Tan family"; setText(FamilyLink.familyName) }
+        val base = EditText(this).apply {
+            hint = "Relay address, e.g. https://….trycloudflare.com"; inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setText(FamilyLink.relay.takeIf { it.isNotBlank() }?.let { Invite.baseOf(it) } ?: "")
+        }
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0); addView(fname); addView(base) }
+        AlertDialog.Builder(this).setTitle("👑 Create a family").setView(form)
+            .setMessage("A new private family room is made with a random code. You'll get a QR code to invite the others.")
+            .setPositiveButton("Create") { _, _ ->
+                val b = base.text.toString().trim()
+                if (b.isEmpty()) { toast("Enter the relay address (ask whoever runs the relay)"); return@setPositiveButton }
+                FamilyLink.createFamily(b, fname.text.toString().trim().ifBlank { "${FamilyLink.myName}'s family" })
+                FamilyService.start(this); FamilyLink.restart()
+                find<EditText>(R.id.relay_addr).setText(FamilyLink.relay); find<Switch>(R.id.family_on).isChecked = true
+                refresh()
+                startActivity(Intent(this, InviteActivity::class.java))
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun confirmJoin(inv: Invite) {
+        AlertDialog.Builder(this).setTitle("Join ${inv.familyName.ifBlank { "this family" }}?")
+            .setMessage("Invited by ${inv.inviterName.ifBlank { "a family member" }}.\nTheir phone's key ${inv.inviterKey} will be trusted.\n\n" +
+                "This replaces any family this phone was in before.")
+            .setPositiveButton("Join") { _, _ ->
+                FamilyLink.joinFamily(inv)
+                // connect only once this phone has a name, so the family never sees a nameless member
+                if (FamilyLink.myRole != null) { FamilyService.start(this); FamilyLink.restart() }
+                find<EditText>(R.id.relay_addr).setText(FamilyLink.relay); find<Switch>(R.id.family_on).isChecked = true
+                refresh()
+                if (FamilyLink.myRole == null) askWhoAmI() else toast("Joined ${inv.familyName}")
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.data?.toString()?.let { Invite.parse(it) }?.let { confirmJoin(it) }
     }
 
     // ------------------------------------------------------------------ home: the big status card
@@ -303,6 +365,7 @@ class MainActivity : AppCompatActivity() {
             saveAddr()
             if (checked && FamilyLink.relay.isBlank()) { toast("Enter the relay address shown on the laptop first"); on.isChecked = false; return@setOnCheckedChangeListener }
             FamilyLink.enabled = checked
+            if (checked && FamilyLink.myRole == null) return@setOnCheckedChangeListener   // connect once the phone has a name
             if (checked) { FamilyService.start(this); FamilyLink.restart() } else { FamilyService.stop(this); FamilyLink.stop() }
         }
         find<Switch>(R.id.elder_on).setOnCheckedChangeListener { _, c -> FamilyLink.senior = c; renderHome() }
@@ -332,6 +395,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
         find<Button>(R.id.btn_change_role).setOnClickListener { askWhoAmI() }
+        find<Button>(R.id.btn_create_family).setOnClickListener { askCreateFamily() }
+        find<Button>(R.id.btn_join_family).setOnClickListener { scanInvite.launch(Intent(this, ScanActivity::class.java)) }
+        find<Button>(R.id.btn_invite).setOnClickListener {
+            if (FamilyLink.familyCode == null) toast("Create or join a family first") else startActivity(Intent(this, InviteActivity::class.java))
+        }
         find<Button>(R.id.btn_forget_keys).setOnClickListener {
             AlertDialog.Builder(this)
                 .setMessage("Forget the family's paired keys? Do this if someone reinstalled the app or changed phone.")
@@ -343,6 +411,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderFamily() {
         val me = FamilyLink.myRole
+        find<TextView>(R.id.family_line).text = when {
+            FamilyLink.familyCode == null -> "Not in a family yet: create one, or join with a QR code"
+            else -> "👪 ${FamilyLink.familyName.ifBlank { "My family" }}${if (FamilyLink.isAdmin) " · I created it" else ""}"
+        }
         find<TextView>(R.id.me_line).text = if (me == null) "Not set up yet" else
             "I'm ${FamilyLink.myName} (id \"$me\")${if (FamilyLink.senior) " · senior citizen" else ""}"
         val faces = FaceStore.load(this)

@@ -113,6 +113,14 @@
             style="@style/Body"
             android:text="Connect to the family relay (cloud address, or the laptop). Same address on every family phone. When a caller looks like a family member, the REAL person is asked on their own phone. Add YOUR face in section 2 (tick “This is me”): it's shared with the family's phones, signed, no photo." />
 
+        <TextView android:id="@+id/family_line" style="@style/Body" android:textSize="17sp" android:textStyle="bold" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/btn_create_family" style="@style/Btn" android:layout_width="0dp" android:layout_weight="1" android:text="👑 Create family" />
+            <Button android:id="@+id/btn_join_family" style="@style/Btn" android:layout_width="0dp" android:layout_weight="1" android:layout_marginStart="8dp" android:text="📷 Join family" />
+        </LinearLayout>
+        <Button android:id="@+id/btn_invite" style="@style/Btn" android:layout_width="match_parent" android:text="➕ Invite someone (QR code / link)" />
+        <TextView style="@style/Body" android:text="Or type a relay address by hand:" android:textColor="#8B949E" android:textSize="13sp" />
+
         <EditText
             android:id="@+id/relay_addr"
             android:layout_width="match_parent"
