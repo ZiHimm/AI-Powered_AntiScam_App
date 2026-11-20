@@ -65,7 +65,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FamilyLink.init(this)
+        if (FamilyLink.myRole != null && !FamilyLink.isMum) { openFamilyMode(); return }  // Son's / Daughter's phone
         setContentView(R.layout.activity_main)
+        if (FamilyLink.myRole == null) main.post { askWhosePhone() }
         engine = FaceEngine.get(this)
         Notifier.ensureChannels(this)
 
@@ -141,6 +144,26 @@ class MainActivity : AppCompatActivity() {
         renderPeople()
         renderFamily()
         renderHome()
+    }
+
+    // ------------------------------------------------------------------ one app: whose phone is this?
+
+    private fun askWhosePhone() {
+        val options = arrayOf("👵  Mum: protect my video calls", "👦  Son: answer for Mum, get her alerts", "👩  Daughter: answer for Mum, get her alerts")
+        AlertDialog.Builder(this).setTitle("Whose phone is this?").setCancelable(false)
+            .setItems(options) { _, i ->
+                val role = listOf("mum", "son", "daughter")[i]
+                val changed = FamilyLink.myRole != role
+                FamilyLink.myRole = role
+                if (changed && FamilyLink.enabled) FamilyLink.restart()
+                if (role == "mum") refresh() else openFamilyMode()
+            }.show()
+    }
+
+    private fun openFamilyMode() {
+        FamilyLink.stop() // the family-mode service owns the connection on Son's/Daughter's phone
+        startActivity(Intent(this, FamilyActivity::class.java))
+        finish()
     }
 
     // ------------------------------------------------------------------ home: the big status card Mum sees
@@ -287,6 +310,7 @@ class MainActivity : AppCompatActivity() {
                 else -> svc.simulateCall("son")
             }
         }
+        find<Button>(R.id.btn_change_role).setOnClickListener { askWhosePhone() }
         find<Button>(R.id.btn_forget_keys).setOnClickListener {
             AlertDialog.Builder(this)
                 .setMessage("Forget Son's and Daughter's paired keys? Do this if one of them reinstalled the family app.")

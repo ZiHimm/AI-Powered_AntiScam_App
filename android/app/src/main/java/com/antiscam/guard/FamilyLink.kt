@@ -15,10 +15,11 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Connects this phone to the family relay in mobile/relay (the laptop stand-in for FCM push) as
- * **Mum's device**. Son's and Daughter's phones run the mobile/ app.
+ * whichever family role this phone has (Mum = protected phone with the detector; Son/Daughter = family mode).
+ * Family Verify (mobile/) speaks the same protocol, so any mix of the two apps works.
  *
  * Same protocol as mobile/www/app.js:
- *   → {t:"hello", role:"mum", pub:<jwk>, name:"Mum"}
+ *   → {t:"hello", role:"mum"|"son"|"daughter", pub:<jwk>, name}
  *   ← {t:"peers", peers:{son:{online,pub}, …}}      keys are pinned on first sight
  *   ↔ {t:"msg", to|from, body:{kind:…}}
  *   → {t:"log", tag, html}                         shows up on the laptop monitor
@@ -28,6 +29,7 @@ import java.util.concurrent.TimeUnit
 object FamilyLink {
 
     val MEMBERS = linkedMapOf("son" to "Son", "daughter" to "Daughter")
+    val ROLES = listOf("mum", "son", "daughter")
     fun nameOf(role: String) = MEMBERS[role] ?: if (role == "mum") "Mum" else role
     /** Enrolled face named "Son" ↔ the phone with role "son". */
     fun roleForName(name: String): String? = MEMBERS.entries.firstOrNull { it.value.equals(name.trim(), true) }?.key
@@ -38,6 +40,13 @@ object FamilyLink {
     private const val PREFS = "family"
     private lateinit var app: Context
     private val prefs get() = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** Whose phone this is: "mum", "son", "daughter", or null until chosen on first launch. */
+    var myRole: String?
+        get() = prefs.getString("role", null)
+        set(v) = prefs.edit().putString("role", v).apply()
+    val isMum get() = myRole == "mum"
+    private val me get() = myRole ?: "mum"
 
     var relay: String
         get() = prefs.getString("relay", "") ?: ""
@@ -107,10 +116,10 @@ object FamilyLink {
             override fun onOpen(webSocket: WebSocket, response: Response) = main.post {
                 if (gen != generation) return@post
                 connected = true
-                webSocket.send(JSONObject().put("t", "hello").put("role", "mum")
-                    .put("pub", DeviceKey.jwk()).put("name", "Mum").toString())
-                setStatus("Connected as Mum's phone · ${relay}")
-                log("sec", "Mum's detector connected. Device key ${DeviceKey.fingerprint}")
+                webSocket.send(JSONObject().put("t", "hello").put("role", me)
+                    .put("pub", DeviceKey.jwk()).put("name", nameOf(me)).toString())
+                setStatus("Connected as ${nameOf(me)}'s phone · ${relay}")
+                log("sec", "${nameOf(me)}'s phone connected. Device key ${DeviceKey.fingerprint}")
             }.let {}
 
             override fun onMessage(webSocket: WebSocket, text: String) = main.post {
@@ -131,9 +140,9 @@ object FamilyLink {
     private fun dropped(code: Int, reason: String) {
         connected = false; online.clear()
         if (code == 4000) {
-            // relay: "replaced by a newer connection" — another device took the Mum role
-            setStatus("Another phone is connected as Mum (the mobile/ app?). Close it, then reconnect here.")
-            LiveLog.add("Relay: another phone took the Mum role. Not reconnecting.")
+            // relay: "replaced by a newer connection": another device took this role
+            setStatus("Another phone is connected as ${nameOf(me)}. Close it, then reconnect here.")
+            LiveLog.add("Relay: another phone took the ${nameOf(me)} role. Not reconnecting.")
             return
         }
         setStatus("Disconnected ($reason). Retrying…")
@@ -151,7 +160,8 @@ object FamilyLink {
     }
 
     private fun onPeers(peers: JSONObject) {
-        for (role in MEMBERS.keys) {
+        for (role in ROLES) {
+            if (role == me) continue
             val p = peers.optJSONObject(role) ?: continue
             val was = online[role] == true
             online[role] = p.optBoolean("online")
@@ -175,7 +185,7 @@ object FamilyLink {
         keyMismatch.remove(role)
         if (pinned == null) {
             prefs.edit().putString("pin_$role", fp).apply()
-            log("sec", "Paired with ${nameOf(role)}'s phone. Key $fp pinned on Mum's phone.")
+            log("sec", "Paired with ${nameOf(role)}'s phone. Key $fp pinned on ${nameOf(me)}'s phone.")
         }
         peerKeys[role] = DeviceKey.publicKeyFromJwk(jwk)
     }
@@ -183,7 +193,7 @@ object FamilyLink {
     fun pinOf(role: String): String? = prefs.getString("pin_$role", null)
 
     fun forgetPins() {
-        prefs.edit().apply { MEMBERS.keys.forEach { remove("pin_$it") } }.apply()
+        prefs.edit().apply { ROLES.forEach { remove("pin_$it") } }.apply()
         peerKeys.clear(); keyMismatch.clear()
         LiveLog.add("Forgot paired family keys. They'll be re-paired when the phones reconnect.")
         if (enabled) restart()
@@ -201,7 +211,7 @@ object FamilyLink {
 
     /** Tells Son/Daughter whether they're guardians (shown on their phones). */
     fun sendConfig() {
-        if (!connected) return
+        if (!connected || !isMum) return
         for (role in MEMBERS.keys) {
             if (online[role] != true) continue
             sendTo(role, JSONObject().put("kind", "config").put("guardian", isGuardian(role))

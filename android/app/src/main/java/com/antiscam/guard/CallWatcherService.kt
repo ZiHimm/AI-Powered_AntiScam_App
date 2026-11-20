@@ -63,6 +63,12 @@ class CallWatcherService : AccessibilityService() {
         audio = getSystemService(AudioManager::class.java)
         engine = FaceEngine.get(this)
         overlay = WarningOverlay(this)
+        FamilyLink.init(this)
+        if (FamilyLink.myRole != null && !FamilyLink.isMum) {
+            // Step 1 of the one-app plan: only Mum's phone checks calls; Son/Daughter use family mode (FamilyService)
+            LiveLog.add("This is ${FamilyLink.nameOf(FamilyLink.myRole!!)}'s phone (family mode): video calls are checked on Mum's phone.")
+            return
+        }
         family = FamilyCheck(overlay) { hangUpFromOverlay() }
         FamilyLink.init(this)
         FamilyLink.listener = family
@@ -99,6 +105,7 @@ class CallWatcherService : AccessibilityService() {
     }
 
     private fun step() {
+        if (FamilyLink.myRole != null && !FamilyLink.isMum) { if (activeApp != null) endCall(); return } // switched to family mode
         val root = rootInActiveWindow
         val pkg = root?.packageName?.toString()
         val inCall = audio.mode == AudioManager.MODE_IN_COMMUNICATION

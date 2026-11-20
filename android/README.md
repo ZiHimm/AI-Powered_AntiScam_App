@@ -1,4 +1,17 @@
-# AntiScam Guard: Android app (proof of concept)
+# AntiScam Guard: Android app (one app for the whole family)
+
+**One APK for everyone.** On first launch it asks **"Whose phone is this?"**:
+
+| Choice | What the phone does |
+| --- | --- |
+| 👵 **Mum** | **Protected phone.** Watches WhatsApp / Instagram / Messenger / Telegram video calls, checks the caller's face on the phone, asks the real family member, and shows warnings over the call. Home screen: a big Protected / Partly protected / Not protected card with one-tap fixes. |
+| 👦 **Son** / 👩 **Daughter** | **Family mode.** Stays connected in the background (foreground service). "Are you calling Mum right now?" pops up, Yes/No needs the **fingerprint** (or screen lock), and the answer is signed. Guardian alerts are shown only after the signature, nonce and age checks pass, with **Call Mum now** / signed **Tell Mum to hang up**. Forged and replayed alerts are blocked. |
+
+Change it later: Mum: ⚙ Settings → section 4 → *Change whose phone this is*; family mode: ⚙ Settings.
+Same protocol as Family Verify (`mobile/`), so the two apps can be mixed on one relay. The design for **everyone
+protected** (Step 2) is in [`docs/team/2026-11-21-one-app-design.md`](../docs/team/2026-11-21-one-app-design.md).
+
+## Mum's phone: the call detector
 
 Runs in the background. When a **WhatsApp, Instagram, Messenger or Telegram** video call is on screen, it looks at
 the caller's face (on the phone, never uploaded) and compares it with your family's enrolled faces.
@@ -40,7 +53,12 @@ Keystore. Son's and Daughter's keys are pinned the first time they're seen, and 
 another phone takes the role. If Son's or Daughter's phone was paired with the `mobile/` Mum app before, tap
 **Forget paired family keys** there once, so it pairs with this phone's key instead.
 
-## Install on a phone (no Play Store)
+## Install (no Play Store)
+
+Install the same APK on every phone, then pick whose phone it is. **Son / Daughter:** allow notifications, open
+⚙ Settings, enter the same relay address as Mum's phone and tap Connect. That's all. The steps below are for **Mum's phone**.
+
+### Mum's phone
 
 1. On the phone, download **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)**
    (GitHub builds it automatically after every push; see *Releases → Android app (latest build)*).

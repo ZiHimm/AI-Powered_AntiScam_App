@@ -144,6 +144,7 @@
 
         <Button android:id="@+id/btn_sim_son" style="@style/Btn" android:text="Test: a call that looks like Son" />
         <Button android:id="@+id/btn_forget_keys" style="@style/Btn" android:text="Forget paired family keys" />
+        <Button android:id="@+id/btn_change_role" style="@style/Btn" android:text="Change whose phone this is" />
 
         <!-- 4. Log -->
         <TextView style="@style/Section" android:text="Activity" />
