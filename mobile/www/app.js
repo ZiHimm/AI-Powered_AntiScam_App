@@ -172,6 +172,7 @@ const isOnline = (r) => !!net.peers[r]?.online;
 
 function connect() {
   clearTimeout(net.timer);
+  net.replaced = false;
   if (net.ws) { net.ws.onclose = null; try { net.ws.close(); } catch { /* ignore */ } }
   net.url = `${cfg.relay.replace(/\/+$/, '')}/ws`;
   let ws;
@@ -193,6 +194,7 @@ function connect() {
     net.ok = false;
     if (ev.code === 4000) {
       // another phone connected with the same role: don't fight over it, wait for the user
+      net.replaced = true;
       setNetStatus(false, `another phone is using the ${nm(ROLE)} role. Tap "Save & reconnect" to take it back`);
       log('warn', `Disconnected: another phone connected as ${nm(ROLE)}. Two phones can't share a role.`);
       return;
@@ -202,6 +204,29 @@ function connect() {
   };
   ws.onerror = () => {};
 }
+// Coming back to the front (e.g. after a WhatsApp call). While hidden, the WebView puts this page to sleep and
+// messages that arrive wait in a queue; they're handled as soon as the page wakes up. So only reconnect if the
+// socket is really gone. Replacing a live socket here would throw those queued messages away.
+let hiddenAt = 0;
+function onAppVisible() {
+  const away = hiddenAt ? now() - hiddenAt : 0;
+  hiddenAt = 0;
+  if (net.replaced || !cfg.relay) return;           // another phone took this role on purpose: leave it
+  if (net.native) return;                           // the native background service owns the connection
+  const state = net.ws ? net.ws.readyState : WebSocket.CLOSED;
+  if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
+  log('info', `Back in front after ${Math.round(away / 1000)}s: connection was lost, reconnecting.`);
+  connect();
+}
+function watchAppVisibility() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt = now(); else onAppVisible();
+  });
+  // Capacitor's own resume event also fires when Android un-freezes the app without a visibility change
+  Plugins.App?.addListener?.('resume', onAppVisible);
+  Plugins.App?.addListener?.('pause', () => { hiddenAt = hiddenAt || now(); });
+}
+
 function setNetStatus(ok, why = '') {
   const pill = $('#net-status');
   pill.className = `pill ${ok ? 'pill-ok' : 'pill-err'}`;
@@ -1436,6 +1461,7 @@ function showSetup() {
   await initKeys();
   setupNative();
   connect();
+  watchAppVisibility();
   if (params.get('models') !== '0') loadModels(); // ?models=0 = skip face models (automated tests)
   if (window.initWhatsAppMode) window.initWhatsAppMode();
 })();
