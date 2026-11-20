@@ -275,6 +275,9 @@ wss.on('connection', (ws) => {
     if (ws.role === 'monitor') room.monitors.delete(ws);
     else if (ws.role && room.devices.get(ws.role) === ws) {
       room.devices.delete(ws.role);
+      // forget step-2 member names when they leave (classic roles keep their name for Family Verify),
+      // so a room doesn't keep growing if people join under new names (review by Ben)
+      if (!ROLES.includes(ws.role)) delete room.hellos[ws.role];
       console.log(`[${ts()}] ${ws.role} offline, ${mask(room.code)}`);
       broadcastPeers(room);
     }

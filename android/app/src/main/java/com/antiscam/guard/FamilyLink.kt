@@ -206,9 +206,17 @@ object FamilyLink {
             LiveLog.add("Relay: another phone took the ${nameOf(me)} role. Not reconnecting.")
             return
         }
-        setStatus("Disconnected ($reason). Retrying…")
+        if (code == 4008 && reason.contains("family full")) {
+            // relay: this family already has 8 phones. Retrying won't help (review by Ben)
+            setStatus("This family is full (8 phones). Ask the family to remove an old phone, then reconnect.")
+            LiveLog.add("Relay: family full. Not reconnecting.")
+            return
+        }
+        // room full / rate limited / relay full: try again, but slowly; anything else: quickly
+        val wait = if (code in 4001..4999) 10_000L else 2_000L
+        setStatus("Disconnected ($reason). Retrying in ${wait / 1000}s…")
         val gen = generation
-        main.postDelayed({ if (gen == generation && enabled) connect() }, 2000)
+        main.postDelayed({ if (gen == generation && enabled) connect() }, wait)
     }
 
     private fun handle(text: String) {
