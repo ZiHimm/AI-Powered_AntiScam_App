@@ -228,6 +228,7 @@ object FamilyLink {
                 when (body.optString("kind")) {
                     "profile" -> onProfile(from, body)
                     "face" -> FaceShare.onFace(from, body)
+                    "face-request" -> if (isMember(from)) FaceShare.sendMyFace(from)   // "please send me your face"
                     else -> listeners.toList().forEach { it.onFamilyMessage(from, body) }
                 }
             }
@@ -289,6 +290,7 @@ object FamilyLink {
             sendProfile(from)                // make sure they know us too
             FaceShare.sendMyFace(from)       // and our face, so their phone can recognise us
         }
+        FaceShare.requestIfMissing(from)     // self-heal: if we still don't have their face, ask for it
         bump()
     }
 

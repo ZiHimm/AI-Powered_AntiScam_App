@@ -345,6 +345,7 @@ class MainActivity : AppCompatActivity() {
         for (m in FamilyLink.others()) {
             val n = FamilyLink.nameOf(m.id)
             val tags = listOfNotNull(
+                if (m.id in FamilyLink.keyMismatch) "⚠️ key mismatch: Settings → Advanced → Forget paired family keys" else null,
                 if (m.senior) "senior" else null,
                 if (faces.any { it.memberId == m.id || it.name.equals(n, true) }) "face ✓" else "no face yet",
                 if (FamilyLink.isGuardian(m.id) && FamilyLink.senior) "my guardian" else null,
@@ -454,6 +455,10 @@ class MainActivity : AppCompatActivity() {
                 target == null -> toast("No other family phone is online")
                 else -> svc.simulateCall(target.id)
             }
+        }
+        find<Button>(R.id.btn_sync_faces).setOnClickListener {
+            val n = FaceShare.syncNow()
+            toast(if (n == 0) "Not connected to any family phone right now" else "Asked $n family phone(s) to share faces. Updates in a few seconds.")
         }
         find<Button>(R.id.btn_change_role).setOnClickListener { startActivity(Intent(this, SetupActivity::class.java)) }
         find<Button>(R.id.btn_create_family).setOnClickListener { askCreateFamily() }

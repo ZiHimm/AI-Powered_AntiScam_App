@@ -39,6 +39,31 @@ object FaceShare {
             else "Shared my face (${mine.embeddings.size} sample(s), signed, no photo) with ${sent.joinToString { FamilyLink.nameOf(it) }}")
     }
 
+    private val asked = mutableMapOf<String, Long>()
+
+    /** Ask [member]'s phone for its face if we don't have it (at most once a minute per member). */
+    fun requestIfMissing(member: String) {
+        if (!::app.isInitialized || !FamilyLink.isOnline(member)) return
+        if (FaceStore.load(app).any { it.memberId == member }) return
+        val now = System.currentTimeMillis()
+        if (now - (asked[member] ?: 0L) < 60_000) return
+        asked[member] = now
+        if (FamilyLink.sendTo(member, JSONObject().put("kind", "face-request")))
+            LiveLog.add("Asked ${FamilyLink.nameOf(member)}'s phone for their face (we don't have it yet)")
+    }
+
+    /** "🔄 Sync faces": send mine to everyone and ask everyone for theirs. */
+    fun syncNow(): Int {
+        if (!::app.isInitialized || !FamilyLink.connected) return 0
+        asked.clear()
+        val online = FamilyLink.members.values.filter { it.online }
+        online.forEach { FamilyLink.sendTo(it.id, JSONObject().put("kind", "face-request")) }
+        sendMyFace(null)
+        online.filter { !it.v2 }.forEach { sendMyFace(it.id) }   // also try phones we haven't heard a profile from yet
+        LiveLog.add("Sync faces: sent mine and asked ${online.size} family phone(s) for theirs")
+        return online.size
+    }
+
     fun onFace(from: String, body: JSONObject) {
         if (!::app.isInitialized) return
         val env = body.optJSONObject("env") ?: return
@@ -48,7 +73,9 @@ object FaceShare {
             return
         }
         if (p.optString("from") != from || !FamilyLink.verifyFrom(env, from)) {
-            FamilyLink.log("attack", "✗ Rejected face data claiming to be from ${FamilyLink.nameOf(from)}: bad signature"); return
+            FamilyLink.log("attack", "✗ Rejected face data from ${FamilyLink.nameOf(from)}: signature doesn't match the key paired for them" +
+                if (from in FamilyLink.keyMismatch) " (KEY MISMATCH: an old key is pinned; tap Forget paired family keys or rejoin with the QR)" else "")
+            return
         }
         val arr = p.optJSONArray("embeddings") ?: return
         val embs = (0 until arr.length()).mapNotNull { i ->
