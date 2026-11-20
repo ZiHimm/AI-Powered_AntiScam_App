@@ -1,6 +1,6 @@
 # Fly.io config for the relay. Deploy from the repo root (see mobile/relay/README.md):
 #   fly deploy --config mobile/relay/fly.toml --dockerfile mobile/relay/Dockerfile --ha=false
-app = "family-verify-relay"      # change if the name is taken
+app = "antiscam-family-relay"    # Fly blocks names containing "verify" (phishing filter)
 primary_region = "sin"           # Singapore, closest to Malaysia
 
 [http_service]

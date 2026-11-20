@@ -66,8 +66,8 @@ or `fly auth login`. Fly asks for a card even on the free allowance.
 From the **repo root**:
 
 ```bash
-fly apps create family-verify-relay                       # pick another name if it's taken, and put it in fly.toml
-fly secrets set MONITOR_TOKEN=<long random secret> --app family-verify-relay
+fly apps create antiscam-family-relay   # names containing "verify" are blocked; another name must go in fly.toml
+fly secrets set MONITOR_TOKEN=<long random secret> --app antiscam-family-relay
 fly deploy --config mobile/relay/fly.toml --dockerfile mobile/relay/Dockerfile --ha=false
 ```
 
@@ -75,8 +75,8 @@ fly deploy --config mobile/relay/fly.toml --dockerfile mobile/relay/Dockerfile -
   family across them.
 - `fly.toml` keeps the machine always on (`auto_stop_machines = "off"`). Free tiers that sleep take ~50 s to wake,
   which would ruin the demo.
-- The address is `wss://family-verify-relay.fly.dev/f/<FAMILY-CODE>`.
-- Logs: `fly logs --app family-verify-relay`. Room codes are only logged as their first 4 characters.
+- The address is `wss://antiscam-family-relay.fly.dev/f/<FAMILY-CODE>`.
+- Logs: `fly logs --app antiscam-family-relay`. Room codes are only logged as their first 4 characters.
 
 ## Deploy on Railway (alternative)
 
@@ -92,7 +92,7 @@ The relay refuses to start on Fly or Railway without `MONITOR_TOKEN`.
 ```bash
 cd mobile
 node relay/check.js http://localhost:8000                          # laptop
-node relay/check.js https://family-verify-relay.fly.dev <MONITOR_TOKEN>   # hosted
+node relay/check.js https://antiscam-family-relay.fly.dev <MONITOR_TOKEN>   # hosted
 ```
 
 It uses throwaway room codes, so it never disturbs a real family. It checks:
