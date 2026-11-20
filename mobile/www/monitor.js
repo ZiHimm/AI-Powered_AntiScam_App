@@ -4,16 +4,40 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const NAMES = { mum: '👵 Mum', son: '👦 Son', daughter: '👩 Daughter', relay: 'relay', scammer: '😈 scammer' };
-let ws, peers = {}, captured = null;
+let ws, peers = {}, captured = null, canInject = true;
+// Works on the laptop relay (ws://host/ws) and on a hosted relay inside a family room
+// (https://host/f/<CODE>/monitor.html → wss://host/f/<CODE>/ws). The token that unlocks the
+// presenter/scammer buttons goes after # so it never reaches server logs: …/monitor.html#token=…
+const ROOM_BASE = location.pathname.replace(/\/[^/]*$/, '');
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${ROOM_BASE}/ws`;
+const TOKEN = new URLSearchParams(location.hash.slice(1)).get('token') || '';
+
+// Phones send log lines as HTML. Any device that knows the room code can send one, so never run it:
+// only these tags survive, with no attributes; everything else becomes plain text.
+const SAFE = new Set(['B', 'I', 'CODE', 'BR', 'SMALL']);
+function safeHtml(html) {
+  const src = new DOMParser().parseFromString(`<div>${String(html ?? '')}</div>`, 'text/html').body.firstChild;
+  const out = document.createElement('div');
+  (function copy(from, to) {
+    for (const n of from.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) to.appendChild(document.createTextNode(n.textContent));
+      else if (n.nodeType === Node.ELEMENT_NODE) {
+        if (SAFE.has(n.tagName)) copy(n, to.appendChild(document.createElement(n.tagName)));
+        else copy(n, to);   // unknown tag: keep its text, drop the tag
+      }
+    }
+  })(src, out);
+  return out.innerHTML;
+}
 
 function line(who, tag, html) {
   const li = document.createElement('li');
   if (tag === 'sep') {
     li.className = 'sep';
-    li.innerHTML = `── ${html} ──`;
+    li.innerHTML = `── ${safeHtml(html)} ──`;
   } else {
-    li.innerHTML = `<time>${new Date().toLocaleTimeString()}</time><span class="who who-${who}">${esc(NAMES[who] || who)}</span>`
-      + `<span class="tag tag-${esc(tag)}">${esc(tag)}</span><span class="msg">${html}</span>`;
+    li.innerHTML = `<time>${new Date().toLocaleTimeString()}</time><span class="who who-${esc(who)}">${esc(NAMES[who] || who)}</span>`
+      + `<span class="tag tag-${esc(tag)}">${esc(tag)}</span><span class="msg">${safeHtml(html)}</span>`;
   }
   const ol = $('#log');
   ol.prepend(li);
@@ -23,15 +47,15 @@ function line(who, tag, html) {
 function renderDevs() {
   $('#devs').innerHTML = ['mum', 'son', 'daughter'].map((r) => {
     const p = peers[r] || {};
-    return `<div class="dev ${p.online ? 'on' : 'off'}"><span>${NAMES[r]}<small>${p.pub ? `key ${p.pub.x.slice(0, 10)}…` : 'not paired'}</small></span>`
+    return `<div class="dev ${p.online ? 'on' : 'off'}"><span>${NAMES[r]}<small>${p.pub ? `key ${esc(String(p.pub.x).slice(0, 10))}…` : 'not paired'}</small></span>`
       + `<span class="st">● ${p.online ? 'online' : 'offline'}</span></div>`;
   }).join('');
 }
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws = new WebSocket(WS_URL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({ t: 'hello', role: 'monitor' }));
+    ws.send(JSON.stringify({ t: 'hello', role: 'monitor', token: TOKEN }));
     $('#conn').className = 'pill pill-ok';
     $('#conn').textContent = 'Relay connected';
   };
@@ -52,6 +76,10 @@ function connect() {
       line(m.role, m.tag, m.html); // device-generated HTML from our own app
     } else if (m.t === 'traffic') {
       onTraffic(m);
+    } else if (m.t === 'monitor') {
+      canInject = m.canInject;
+      $('#conn').textContent = canInject ? 'Relay connected' : 'Relay connected · read-only';
+      if (!canInject) line('relay', 'warn', 'Read-only monitor: presenter and scammer buttons are off. Open this page with <code>#token=…</code> to unlock them.');
     }
   };
 }
@@ -73,7 +101,10 @@ function onTraffic(m) {
   }
 }
 
-const inject = (to, body, from = 'mum') => ws.send(JSON.stringify({ t: 'inject', from, to, body }));
+const inject = (to, body, from = 'mum') => {
+  if (!canInject) { line('relay', 'warn', 'Read-only monitor: nothing was sent.'); return; }
+  ws.send(JSON.stringify({ t: 'inject', from, to, body }));
+};
 const members = () => ['son', 'daughter'].filter((r) => peers[r]?.online);
 
 document.querySelectorAll('[data-demo]').forEach((b) => b.addEventListener('click', () => {

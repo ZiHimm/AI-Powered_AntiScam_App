@@ -1,0 +1,22 @@
+# Fly.io config for the relay. Deploy from the repo root (see mobile/relay/README.md):
+#   fly deploy --config mobile/relay/fly.toml --dockerfile mobile/relay/Dockerfile --ha=false
+app = "family-verify-relay"      # change if the name is taken
+primary_region = "sin"           # Singapore, closest to Malaysia
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Never sleep: waking a stopped machine takes seconds and drops the phones mid-demo.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    path = "/healthz"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
