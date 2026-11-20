@@ -124,7 +124,7 @@ class MainActivity : AppCompatActivity() {
 
     private val pollLog = object : Runnable {
         override fun run() {
-            if (FamilyLink.version != familyVersion) { familyVersion = FamilyLink.version; renderFamily(); renderHome() }
+            if (FamilyLink.version != familyVersion) { familyVersion = FamilyLink.version; renderFamily(); renderPeople(); renderHome() }
             if (LiveLog.version != logVersion) {
                 renderHome()
                 logVersion = LiveLog.version
