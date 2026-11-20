@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Join your family · AntiScam Guard</title>
+  <link rel="icon" type="image/png" href="icons/favicon-32.png">
+  <style>
+    body { margin: 0; font: 17px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0d1117; color: #e6edf3;
+      display: grid; place-items: center; min-height: 100vh; }
+    main { max-width: 420px; padding: 28px 22px; text-align: center; }
+    .logo { font-size: 56px; }
+    h1 { font-size: 26px; margin: 8px 0 4px; }
+    p { color: #b1bac4; }
+    .btn { display: block; margin: 14px 0; padding: 16px; border-radius: 16px; font-weight: 700; font-size: 19px;
+      text-decoration: none; color: #fff; background: #2563eb; }
+    .btn.alt { background: #21262d; border: 1px solid #30363d; }
+    .small { font-size: 13px; color: #8b949e; }
+    code { background: #161b22; padding: 2px 6px; border-radius: 6px; }
+    .bad { color: #f87171; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="logo">🛡️</div>
+  <h1 id="title">Join your family on AntiScam Guard</h1>
+  <p id="sub">Your family checks each other's video calls for deepfake scams. Faces and data stay on your phones.</p>
+  <a class="btn" id="open" href="#">Open AntiScam Guard and join</a>
+  <a class="btn alt" href="https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-step2-preview/AntiScamGuard.apk">
+    Don't have the app? Download it (Android)</a>
+  <p class="small" id="steps">After installing, come back to this page and tap the blue button, or open the app → Settings →
+    <b>Join family</b> and scan the QR code.</p>
+  <p class="small" id="who"></p>
+  <p class="small">The family details are only in this link (after the <code>#</code>), never sent to a server.
+    Only open invites from your own family.</p>
+</main>
+<script>
+  // Family details live in the hash (#r=…&f=…), which browsers never send to the server.
+  const hash = location.hash.slice(1);
+  const p = new URLSearchParams(hash);
+  const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  if (!p.get('r') || !p.get('f')) {
+    document.getElementById('title').textContent = 'This invite link is incomplete';
+    document.getElementById('sub').innerHTML = '<span class="bad">Ask your family member to share the invite again.</span>';
+    document.getElementById('open').style.display = 'none';
+  } else {
+    const fam = p.get('n') || 'your family';
+    document.getElementById('title').textContent = `Join ${fam}`;
+    document.getElementById('who').innerHTML = `Invited by <b>${esc(p.get('an') || 'a family member')}</b> · key <code>${esc(p.get('k'))}</code>`;
+    // Android: open the app via an intent link; if it isn't installed, Chrome falls back to the download.
+    const apk = 'https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-step2-preview/AntiScamGuard.apk';
+    document.getElementById('open').href =
+      `intent://join?${hash}#Intent;scheme=antiscam;package=com.antiscam.guard;S.browser_fallback_url=${encodeURIComponent(apk)};end`;
+  }
+</script>
+</body>
+</html>
