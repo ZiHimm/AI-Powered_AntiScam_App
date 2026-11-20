@@ -38,6 +38,7 @@ const defaults = () => ({
   secretQuestion: "What did we eat after Grandma's 70th birthday?",
   replyTimeout: 15,
   callerId: 'unknown',
+  callApp: 'WhatsApp',
   matchThreshold: 0.5,
   blurThreshold: 40,
   showDebug: true,
@@ -293,7 +294,9 @@ async function startCall() {
   $('#mum-call').hidden = false;
   renderMum();
   logSep(`New call ${call.id}`);
-  log('info', `📞 Incoming video call to Mum from <b>${esc(callerIdText())}</b>${store.callerId === 'spoofed' ? ' (caller ID is spoofed; we never trust it)' : ' (unknown number)'}. Mode: <b>${store.elderMode ? 'Elder' : 'Standard'}</b>`);
+  $('#call-app-name').textContent = store.callApp;
+  log('info', `📞 ${esc(store.callApp)} video call to Mum from <b>${esc(callerIdText())}</b>${store.callerId === 'spoofed' ? ' (the name on screen can be copied; we never trust it)' : ' (unknown number)'}. Mode: <b>${store.elderMode ? 'Elder' : 'Standard'}</b>`);
+  log('face', `AntiScam Guard (background) noticed the call: ${esc(store.callApp)} is in front and the phone is in call mode. Checking the screen about once a second; frames stay in memory.`);
   try {
     await attachCamera($('#cam'));
     $('#no-cam').hidden = true;
@@ -337,8 +340,10 @@ async function observe() {
 }
 
 function handleObs(obs) {
+  const prevKind = call.lastObs && (call.lastObs.kind + (call.lastObs.id || ''));
   call.lastObs = obs;
   renderDebug(obs);
+  if (call.status === 'scanning' && prevKind !== obs.kind + (obs.id || '')) renderPipeline();
   if (LOCKED.has(call.status)) return;
   const key = obs.kind === 'match' ? `match:${obs.id}` : obs.kind === 'unknown' ? 'unknown' : 'unclear';
   const s = call.streak;
@@ -481,6 +486,7 @@ function endCall(reason = 'Call ended') {
     $('#mum-call').hidden = true;
     $('#mum-home').hidden = false;
     renderMumHome();
+    renderPipeline();
   }, 1400);
   stopCameraIfIdle();
 }
@@ -499,7 +505,7 @@ async function alertGuardians({ level, title, body = '', about = null }) {
   const label = { urgent: '🚨 URGENT alert', info: 'Heads-up', log: 'Silent log' }[level];
   log('sec', `${label} signed by Mum's device → ${to.map(nm).join(' + ')} at the same time ${code({ level, nonce: payload.nonce, sig: env.sig.slice(0, 18) + '…' })}`);
   for (const g of to) deliver(g, () => phones[g].receiveAlert(env), label);
-  if (level === 'urgent') renderMum();
+  if (level === 'urgent') renderMum(); else renderPipeline();
 }
 
 async function sendForgedAlert() {
@@ -579,7 +585,56 @@ function updateCountdown() {
   $$('.cd').forEach((el) => { el.textContent = left; });
 }
 
+// "Behind the scenes" strip under Mum's phone: what the background app is doing right now.
+function renderPipeline() {
+  const el = $('#pipeline');
+  if (!el) return;
+  const app = esc(store.callApp);
+  const st = call.active ? call.status : 'idle';
+  const who = call.target ? nm(call.target) : '';
+  const steps = [];
+  const add = (cls, html) => steps.push(`<li class="${cls}">${html}</li>`);
+
+  if (st === 'idle') {
+    add('active idle', `Waiting for a video call in WhatsApp, Instagram or Messenger…`);
+  } else {
+    add('done', `📞 ${app} video call detected`);
+    const o = call.lastObs;
+    if (st === 'scanning') {
+      add('done', `📸 Checking the caller's face on screen`);
+      const live = !o ? 'Looking for a face…'
+        : o.kind === 'match' ? `Face looks like ${nm(o.id)}… confirming`
+        : o.kind === 'unknown' ? 'Face found, comparing with family…'
+        : 'No clear face yet…';
+      add('active', `🙂 ${live}`);
+    } else if (st === 'D') {
+      add('done', `📸 Checked the caller's face on screen`);
+      add('done', `👤 Not a family face, so treated as a normal call`);
+    } else if (st === 'E') {
+      add('done', `📸 Checking the caller's face on screen`);
+      add('warn', `🌫 Can't see a clear face. Mum is told to be careful`);
+    } else {
+      add('done', `📸 Checked the caller's face on screen`);
+      add('done', `🙂 Face looks like <b>${who}</b>, but a deepfake would too`);
+      add(st === 'verifying' ? 'active' : 'done', `📨 Asked ${who}'s own phone: “Are you calling Mum?”`);
+      const result = {
+        verifying: null,
+        A: ['ok', `✅ ${who} said YES → verified call`],
+        B: ['bad', `⛔ ${who} said NO → Mum gets the SCAM warning`],
+        C: ['warn', `⏱ No reply from ${who} → secret question`],
+        'secret-ok': ['ok', `✅ Caller answered the family question`],
+        'secret-fail': ['bad', `⛔ Caller failed the family question → hang up`],
+        warned: ['bad', `📣 ${call.warn ? nm(call.warn.from) : 'A guardian'} told Mum to hang up (signed message)`],
+      }[st];
+      if (result) add(result[0], result[1]);
+    }
+    if (call.notified.length) add('done', `🔔 Guardians alerted: ${call.notified.map(nm).join(', ')}`);
+  }
+  el.innerHTML = `<div class="pl-head">🛡 Behind the scenes <small>what AntiScam Guard does on Mum's phone</small></div><ol>${steps.join('')}</ol>`;
+}
+
 function renderMum() {
+  renderPipeline();
   const elder = store.elderMode;
   const phone = $('#phone-mum');
   phone.classList.toggle('elder', elder);
@@ -755,7 +810,7 @@ class MemberPhone {
   showPing(req) {
     const left = Math.max(0, req.expires - now());
     const el = this.card('ping', `
-      <div class="app"><span>🛡 Family Verify</span><span>now</span></div>
+      <div class="app"><span>🛡 AntiScam Guard</span><span>now</span></div>
       <div class="t">Are you calling Mum right now?</div>
       <div class="d">Someone who looks like you is video-calling Mum.</div>
       <div class="countdown"><i style="animation-duration:${left}ms"></i></div>
@@ -817,7 +872,7 @@ class MemberPhone {
     // 1) signature must come from Mum's device key (exchanged at setup)
     if (!(await verify(env, keys.mum.publicKey))) {
       log('sec', `${this.name}'s phone: ✗ signature check FAILED. Fake alert blocked.`);
-      this.add(this.card('rejected', `<div class="app"><span>🛡 Family Verify</span><span>blocked</span></div>
+      this.add(this.card('rejected', `<div class="app"><span>🛡 AntiScam Guard</span><span>blocked</span></div>
         <div class="t">🛑 Fake alert blocked</div>
         <div class="d">A message saying “${esc(p.title)}” was <b>not signed by Mum's phone</b>. Ignore it and call Mum directly.</div>`));
       this.buzz();
@@ -826,7 +881,7 @@ class MemberPhone {
     // 2) nonce must be fresh (anti-replay), 3) timestamp recent
     if (this.seenNonces.has(p.nonce) || now() - p.ts > 120000) {
       log('sec', `${this.name}'s phone: ✗ nonce ${code(p.nonce)} already used. Replayed alert blocked.`);
-      this.add(this.card('rejected', `<div class="app"><span>🛡 Family Verify</span><span>blocked</span></div>
+      this.add(this.card('rejected', `<div class="app"><span>🛡 AntiScam Guard</span><span>blocked</span></div>
         <div class="t">🛑 Replayed alert blocked</div>
         <div class="d">This alert was already delivered once. Someone is re-sending an old message.</div>`));
       this.buzz();
@@ -850,10 +905,10 @@ class MemberPhone {
     const sigBadge = `<div class="sig">✔ Signed by Mum's phone · ${env.sig.slice(0, 8)}… · ${hhmmss(p.ts)}</div>`;
     let el;
     if (p.level === 'info') {
-      el = this.card('info', `<div class="app"><span>🛡 Family Verify · Mum</span><span>now</span></div>
+      el = this.card('info', `<div class="app"><span>🛡 AntiScam Guard · Mum</span><span>now</span></div>
         <div class="t">${esc(p.title)}</div><div class="d">${esc(p.body)}</div>${sigBadge}`);
     } else {
-      el = this.card('urgent', `<div class="app"><span>🚨 Family Verify · URGENT</span><span>now</span></div>
+      el = this.card('urgent', `<div class="app"><span>🚨 AntiScam Guard · URGENT</span><span>now</span></div>
         <div class="t">${esc(p.title)}</div><div class="d">${esc(p.body)}</div>
         <div class="acts"><button class="b-green" data-a="call">📞 Call Mum now</button><button class="b-red" data-a="warn">⚠️ Tell Mum to hang up</button></div>
         <div class="shared-box"></div>${sigBadge}`);
@@ -911,6 +966,7 @@ function syncSettingsUI() {
   $('#timeout').value = store.replyTimeout;
   $('#timeout-val').textContent = store.replyTimeout;
   $('#caller-id-sel').value = store.callerId;
+  $('#call-app-sel').value = store.callApp;
   $('#notify-blur').checked = store.notifyOnBlur;
   $('#match-th').value = store.matchThreshold;
   $('#match-val').textContent = store.matchThreshold.toFixed(2);
@@ -951,6 +1007,7 @@ function wire() {
   $('#secret-q').addEventListener('change', () => renderMum());
   $('#timeout').addEventListener('input', (e) => setStore({ replyTimeout: +e.target.value }));
   $('#caller-id-sel').addEventListener('change', (e) => setStore({ callerId: e.target.value }));
+  $('#call-app-sel').addEventListener('change', (e) => setStore({ callApp: e.target.value }));
   $('#notify-blur').addEventListener('change', (e) => setStore({ notifyOnBlur: e.target.checked }));
   $('#match-th').addEventListener('input', (e) => setStore({ matchThreshold: +e.target.value }));
   $('#blur-th').addEventListener('input', (e) => setStore({ blurThreshold: +e.target.value }));

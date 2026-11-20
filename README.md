@@ -62,7 +62,19 @@ so it keeps working offline.
 It must be served from `localhost`, not opened as `file://`, because the camera, WebCrypto and model loading all need it.
 Use Chrome. Everything (library + model weights, ~13 MB in `vendor/`) is local, so **no internet is needed at the venue**.
 
-### 2-minute demo script (Section 9 of the brief)
+### Pitch flow (about 4 minutes)
+
+1. **Problem (30s):** scammers deepfake a family member's face on a WhatsApp video call and ask for money.
+2. **Real app (1 min):** a teammate WhatsApp video-calls "Mum's" Android phone running the [Android app](android/).
+   The alert pops up. Mirror the phone to the projector with [scrcpy](https://github.com/Genymobile/scrcpy).
+3. **This web simulation (1.5 min):** *"When it looks like Son, here's what happens next"*, using the script below.
+   The **Behind the scenes** box under Mum's phone shows each step the background app takes.
+4. **Roadmap (30s):** Firebase family linking, real push between phones, Play Store review.
+
+Mum's phone shows the call inside a messaging app (pick WhatsApp / Instagram / Messenger / Telegram in panel 3);
+everything from **🛡 AntiScam Guard** appears as notifications on top of the call, as in the real app.
+
+### 2-minute demo script
 
 | Step | Do this | What judges see |
 | --- | --- | --- |
@@ -75,7 +87,7 @@ Use Chrome. Everything (library + model weights, ~13 MB in `vendor/`) is local, 
 | 5. Attacks | **😈 Forged alert**, then **🔁 Replay old alert**. | Daughter's phone: "🛑 Fake alert blocked" / "🛑 Replayed alert blocked". |
 | Standard Mode | Flip the Elder Mode switch off and repeat. | Smaller banners, user decides, and guardians are **not** alerted. |
 
-Other things to show: **"Son" (spoofed caller ID)** in panel 3 shows that verification ignores the phone number;
+Other things to show: **"Son" (copied profile / spoofed)** in panel 3 shows that verification ignores the name and number on screen;
 untick **Son's phone online** for an offline phone; a teammate's face (or **Stranger**) gives State D, a normal call with no shield.
 
 #### If something goes wrong on stage

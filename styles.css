@@ -301,3 +301,50 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   .phone::before { display: none; }
   .phone.urgent-ring { box-shadow: 0 0 0 3px var(--red), 0 0 24px var(--red); }
 }
+
+/* ---------- AntiScam Guard framing (web simulation of the Android app) ---------- */
+.sim-tag { font-size: 11px; font-weight: 600; color: var(--amber); border: 1px solid #f59e0b66; border-radius: 999px;
+  padding: 2px 8px; vertical-align: middle; margin-left: 6px; }
+.pill-sim { color: #93c5fd; cursor: help; }
+.home-apps { font-size: 12px; opacity: .8; margin: -4px 0 10px; }
+.phone.elder .home-apps { font-size: 14px; }
+
+/* the call itself belongs to another app (generic messaging-app look) */
+.app-bar { display: inline-block; font-size: 11px; color: #d1fae5; background: #065f4699; border-radius: 999px;
+  padding: 3px 10px; margin-bottom: 6px; }
+
+/* AntiScam Guard's messages look like Android notifications from our app, on top of the call */
+.shield-wrap .banner::before, .fullscreen::before {
+  content: "🛡 AntiScam Guard · now"; display: block; font-size: 11px; font-weight: 600; letter-spacing: .2px;
+  opacity: .6; margin-bottom: 4px; }
+.fullscreen::before { opacity: .85; margin-bottom: 0; }
+.shield-wrap .banner { border-radius: 18px; }
+.phone.elder .shield-wrap .banner::before { font-size: 12.5px; }
+
+/* "Behind the scenes" steps under Mum's phone */
+.pipeline { width: var(--phone-w); font-size: 12px; color: var(--muted); background: #0b0f14; border: 1px dashed var(--line);
+  border-radius: 12px; padding: 8px 10px; }
+.pipeline .pl-head { color: var(--text); font-weight: 600; margin-bottom: 4px; }
+.pipeline .pl-head small { color: var(--muted); font-weight: 400; }
+.pipeline ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.pipeline li { padding-left: 16px; position: relative; line-height: 1.35; }
+.pipeline li::before { position: absolute; left: 0; top: 0; }
+.pipeline li.done { color: #c9d1d9; }
+.pipeline li.done::before { content: "✓"; color: #4ade80; }
+.pipeline li.active { color: #93c5fd; }
+.pipeline li.active::before { content: "●"; color: var(--blue); animation: blink 1s infinite; }
+.pipeline li.idle { color: var(--muted); }
+.pipeline li.ok { color: #4ade80; font-weight: 600; }
+.pipeline li.bad { color: #f87171; font-weight: 600; }
+.pipeline li.warn { color: #fbbf24; font-weight: 600; }
+.pipeline li.ok::before, .pipeline li.bad::before, .pipeline li.warn::before { content: "›"; }
+@keyframes blink { 50% { opacity: .3; } }
+@media (max-width: 760px) {
+  .pipeline { width: 100%; }
+  .phone { height: calc(100dvh - 230px); }
+}
+.sim-tag { white-space: nowrap; }
+@media (max-width: 760px) {
+  .pill-sim { display: none; }
+  .sim-tag { font-size: 9.5px; padding: 1px 6px; }
+}

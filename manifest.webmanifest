@@ -1,7 +1,7 @@
 {
-  "name": "Zero-Trust Video Verification",
-  "short_name": "ZeroTrust",
-  "description": "Stops deepfake impersonation calls: on-device face matching, confirmation from the real family member, and signed alerts that can't be forged or replayed.",
+  "name": "AntiScam Guard",
+  "short_name": "AntiScam",
+  "description": "Web simulation of AntiScam Guard: catches deepfake family video-call scams by asking the real family member to confirm.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -10,8 +10,23 @@
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

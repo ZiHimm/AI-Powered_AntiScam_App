@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zero-Trust Video Verification · Demo</title>
+  <title>AntiScam Guard · Web Simulation</title>
   <meta name="description" content="Stops deepfake impersonation calls: on-device face matching, confirmation from the real family member, and signed alerts.">
   <meta name="theme-color" content="#0d1117">
   <link rel="manifest" href="manifest.webmanifest">
@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="ZeroTrust">
+  <meta name="apple-mobile-web-app-title" content="AntiScam">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -20,11 +20,12 @@
   <div class="brand">
     <span class="logo">🛡</span>
     <div>
-      <h1>Zero-Trust Video Verification</h1>
+      <h1>AntiScam Guard <span class="sim-tag">Web simulation</span></h1>
       <p>We don't ask <em>“is this video fake?”</em> We ask <em>“does the real person confirm they're calling?”</em></p>
     </div>
   </div>
   <div class="topbar-right">
+    <span class="pill pill-sim" title="The real Android app runs in the background on Mum's phone and checks WhatsApp/Instagram video calls. This page simulates the whole family system.">📱 Simulates the Android app</span>
     <span id="model-status" class="pill pill-wait">Loading face models…</span>
     <button id="btn-toggle-panel" class="btn ghost small">Hide controls</button>
   </div>
@@ -91,10 +92,18 @@
       <label class="field">Reply window: <b id="timeout-val"></b>s
         <input type="range" id="timeout" min="5" max="30" step="1">
       </label>
-      <label class="field">Caller ID shown to Mum
+      <label class="field">Video call comes in on
+        <select id="call-app-sel">
+          <option>WhatsApp</option>
+          <option>Instagram</option>
+          <option>Messenger</option>
+          <option>Telegram</option>
+        </select>
+      </label>
+      <label class="field">Caller shows up as
         <select id="caller-id-sel">
           <option value="unknown">Unknown number</option>
-          <option value="spoofed">"Son" (spoofed caller ID)</option>
+          <option value="spoofed">"Son" (copied profile / spoofed)</option>
         </select>
       </label>
       <label class="check"><input type="checkbox" id="notify-blur"> Elder Mode: tell guardians about blurry calls too</label>
@@ -149,7 +158,7 @@
     <div class="phones">
       <div class="phone-col">
         <div class="phone-label">
-          <span>📱 <b>Mum</b> <small>Receiver</small></span>
+          <span>📱 <b>Mum</b> <small>🛡 Guard running</small></span>
           <label class="switch" id="elder-switch"><input type="checkbox" id="elder-toggle"><span class="slider"></span> Elder Mode</label>
         </div>
         <div class="phone" id="phone-mum">
@@ -158,7 +167,8 @@
             <div id="mum-home" class="home">
               <div class="home-time clock-big"></div>
               <div class="home-date"></div>
-              <div class="home-shield">🛡 Protected by Family Verify</div>
+              <div class="home-shield">🛡 AntiScam Guard is on</div>
+              <div class="home-apps">Watching video calls in WhatsApp, Instagram &amp; Messenger</div>
               <div id="mum-home-info" class="home-info"></div>
             </div>
             <div id="mum-call" class="call" hidden>
@@ -166,6 +176,7 @@
               <canvas id="overlay"></canvas>
               <div id="no-cam" class="no-cam" hidden>👤<small>Camera off. Use the "Caller's face" buttons</small></div>
               <div class="call-top">
+                <div class="app-bar"><b id="call-app-name">WhatsApp</b> · 🔒 End-to-end encrypted</div>
                 <div class="caller-id" id="caller-id"></div>
                 <div class="call-sub" id="call-sub"></div>
               </div>
@@ -181,6 +192,7 @@
             <div id="mum-ended" class="ended" hidden>Call ended</div>
           </div>
         </div>
+        <div class="pipeline" id="pipeline" aria-label="What AntiScam Guard is doing in the background"></div>
       </div>
 
       <div class="phone-col">
