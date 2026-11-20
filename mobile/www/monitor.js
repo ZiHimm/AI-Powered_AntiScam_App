@@ -44,10 +44,17 @@ function line(who, tag, html) {
   while (ol.children.length > 400) ol.lastChild.remove();
 }
 
+// Any member the relay reports: the fixed demo roles (mum/son/daughter) and Step 2 members with their own ids.
+// Names come from phones, so they're escaped before going into HTML.
+const nameOf = (id) => NAMES[id] || peers[id]?.name || id;
 function renderDevs() {
-  $('#devs').innerHTML = ['mum', 'son', 'daughter'].map((r) => {
+  const order = ['mum', 'son', 'daughter'];
+  const ids = Object.keys(peers).sort((a, b) => ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99) || a.localeCompare(b));
+  if (!ids.length) { $('#devs').innerHTML = '<div class="hint">No phones have joined yet.</div>'; return; }
+  $('#devs').innerHTML = ids.map((r) => {
     const p = peers[r] || {};
-    return `<div class="dev ${p.online ? 'on' : 'off'}"><span>${NAMES[r]}<small>${p.pub ? `key ${esc(String(p.pub.x).slice(0, 10))}…` : 'not paired'}</small></span>`
+    const who = esc(nameOf(r)) + (NAMES[r] || nameOf(r) === r ? '' : ` <small>(${esc(r)})</small>`);
+    return `<div class="dev ${p.online ? 'on' : 'off'}"><span>${who}<small>${p.pub ? `key ${esc(String(p.pub.x).slice(0, 10))}…` : 'not paired'}</small></span>`
       + `<span class="st">● ${p.online ? 'online' : 'offline'}</span></div>`;
   }).join('');
 }
@@ -67,10 +74,14 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.t === 'peers') {
-      for (const r of Object.keys(m.peers)) {
-        if (peers[r] && peers[r].online !== m.peers[r].online) line('relay', m.peers[r].online ? 'info' : 'warn', `${NAMES[r]}'s phone ${m.peers[r].online ? 'connected' : '<b>disconnected</b>'}`);
+      // Step 2 relays drop a custom member from the list when they disconnect (only mum/son/daughter are always
+      // listed), so keep departed members as offline instead of letting them vanish from the monitor.
+      const next = { ...m.peers };
+      for (const r of Object.keys(peers)) if (!next[r]) next[r] = { ...peers[r], online: false, pub: null };
+      for (const r of Object.keys(next)) {
+        if (peers[r] && peers[r].online !== next[r].online) line('relay', next[r].online ? 'info' : 'warn', `${esc(next[r].name || nameOf(r))}'s phone ${next[r].online ? 'connected' : '<b>disconnected</b>'}`);
       }
-      peers = m.peers;
+      peers = next;
       renderDevs();
     } else if (m.t === 'log') {
       line(m.role, m.tag, m.html); // device-generated HTML from our own app
@@ -105,7 +116,8 @@ const inject = (to, body, from = 'mum') => {
   if (!canInject) { line('relay', 'warn', 'Read-only monitor: nothing was sent.'); return; }
   ws.send(JSON.stringify({ t: 'inject', from, to, body }));
 };
-const members = () => ['son', 'daughter'].filter((r) => peers[r]?.online);
+// every online phone except the one the fake messages pretend to come from
+const members = () => Object.keys(peers).filter((r) => r !== 'mum' && peers[r]?.online);
 
 document.querySelectorAll('[data-demo]').forEach((b) => b.addEventListener('click', () => {
   const action = b.dataset.demo;
@@ -130,14 +142,14 @@ $('#btn-forge').addEventListener('click', async () => {
   const env = { body, sig: btoa(String.fromCharCode(...new Uint8Array(sig))) };
   const to = members();
   if (!to.length) { line('scammer', 'warn', 'No family phones online to attack.'); return; }
-  line('scammer', 'attack', `😈 Sends a fake "Mum is in hospital, send RM 5,000" alert to ${to.map((r) => NAMES[r]).join(' + ')}, pretending to be Mum's phone, signed with the scammer's own key.`);
+  line('scammer', 'attack', `😈 Sends a fake "Mum is in hospital, send RM 5,000" alert to ${to.map((r) => esc(nameOf(r))).join(' + ')}, pretending to be Mum's phone, signed with the scammer's own key.`);
   to.forEach((r) => inject(r, { kind: 'alert', env }));
 });
 
 $('#btn-replay').addEventListener('click', () => {
   if (!captured) { line('scammer', 'warn', 'No urgent alert captured yet. Run the "Son taps No" scenario first.'); return; }
   const to = members();
-  line('scammer', 'attack', `🔁 Re-sends the real alert it captured earlier (“${esc(captured.title)}”) to ${to.map((r) => NAMES[r]).join(' + ')}. Replay attack.`);
+  line('scammer', 'attack', `🔁 Re-sends the real alert it captured earlier (“${esc(captured.title)}”) to ${to.map((r) => esc(nameOf(r))).join(' + ')}. Replay attack.`);
   to.forEach((r) => inject(r, { kind: 'alert', env: captured.env }));
 });
 

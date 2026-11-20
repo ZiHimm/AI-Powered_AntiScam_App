@@ -289,7 +289,7 @@ function onMessage(from, body) {
     if (body.kind === 'guardian-warn') return onGuardianWarn(body.env);
     if (body.kind === 'face') return onFaceShared(body.env);
   } else {
-    if (body.kind === 'ping') return phone.showPing(body.req);
+    if (body.kind === 'ping') return phone.onPing(from, body);
     if (body.kind === 'expire-ping') return phone.expirePing(body.nonce);
     if (body.kind === 'cancel-ping') return phone.cancelPing(body.nonce);
     if (body.kind === 'alert') return phone.receiveAlert(body.env);
@@ -1096,15 +1096,37 @@ class MemberPhone {
     }
   }
 
+  // A question may arrive signed: {kind:'ping', req, env} where env = sign(req) by the asking phone (the detector
+  // does this). Then the signed copy is the one we trust, and a bad signature means a stranger on the relay is
+  // trying to trick us into answering. No env (older Mum app / Family Verify as Mum): unchanged behaviour.
+  async onPing(from, body) {
+    if (!body.env) return this.showPing(body.req);
+    let req = null;
+    try { req = JSON.parse(body.env.body); } catch { /* unreadable */ }
+    const ok = req && typeof req.nonce === 'string' && (await verifyFrom(body.env, from));
+    if (!ok) {
+      log('attack', `${this.name}'s phone: ✗ question claiming to be from ${esc(nm(from))} has a bad signature. Fake question blocked.`);
+      this.add(this.card('rejected', `<div class="app"><span>🛡 Family Verify</span><span>blocked</span></div>
+        <div class="t">🛑 Fake question blocked</div>
+        <div class="d">Someone sent “Are you calling ${esc(nm(from))}?” but it was <b>not signed by ${esc(nm(from))}'s phone</b>. Don't answer it. Call ${esc(nm(from))} directly if you're worried.</div>`));
+      this.buzz();
+      return;
+    }
+    log('sec', `${this.name}'s phone: ✓ question signed by ${esc(nm(from))}'s device`);
+    this.showPing({ ...req, signedBy: from });
+  }
+
   // "Are you calling Mum right now?"
   showPing(req) {
     const left = Math.max(0, req.expires - now());
+    const prompt = req.prompt || 'Are you calling Mum right now?';
     const el = this.card('ping', `
       <div class="app"><span>🛡 Family Verify</span><span>now</span></div>
-      <div class="t">Are you calling Mum right now?</div>
+      <div class="t">${esc(prompt)}</div>
       <div class="d">Someone who looks like you is video-calling Mum.</div>
       <div class="countdown"><i style="animation-duration:${left}ms"></i></div>
       <div class="acts"><button class="b-green" data-a="yes">Yes, it's me</button><button class="b-red" data-a="no">No, not me</button></div>
+      ${req.signedBy ? `<div class="sig">✔ Signed by ${esc(nm(req.signedBy))}'s phone</div>` : ''}
       <div class="foot">🔒 Fingerprint required · request ${esc(req.nonce.slice(0, 8))}…</div>`);
     this.pings.set(req.nonce, el);
     $$('button', el).forEach((b) => b.addEventListener('click', () => this.answer(req, b.dataset.a, el)));
