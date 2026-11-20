@@ -91,7 +91,7 @@ object FamilyLink {
 
     private fun url(): String {
         var r = relay.trim().removeSuffix("/").removeSuffix("/ws")
-        r = r.replaceFirst(Regex("^https?://"), "ws://")
+        r = r.replaceFirst(Regex("^https://"), "wss://").replaceFirst(Regex("^http://"), "ws://")
         if (!r.startsWith("ws://") && !r.startsWith("wss://")) r = "ws://$r"
         return "$r/ws"
     }

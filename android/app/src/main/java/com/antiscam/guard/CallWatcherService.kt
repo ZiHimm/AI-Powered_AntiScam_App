@@ -64,6 +64,9 @@ class CallWatcherService : AccessibilityService() {
         LiveLog.serviceConnected = true
         LiveLog.add("Call watcher on (${engine.modelInfo}). Waiting for a video call…")
         if (Build.VERSION.SDK_INT < 30) LiveLog.add("Android ${Build.VERSION.RELEASE}: screen scanning needs Android 11+.")
+        val caps = serviceInfo?.capabilities ?: 0
+        if (caps and android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES == 0)
+            LiveLog.add("⚠️ Gestures not granted yet (needed for one-tap HANG UP): turn the call watcher off and on once.")
         main.post(tick)
     }
 
@@ -125,23 +128,55 @@ class CallWatcherService : AccessibilityService() {
         family.end()
     }
 
-    /** Press the call app's own end-call button, found by its label. Returns false if we couldn't. */
+    /** Roots of the call app's windows (the call screen may not be the "active" window while our card is up). */
+    private fun callRoots(): List<AccessibilityNodeInfo> {
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        try { windows.forEach { w -> w.root?.let { if (it.packageName?.toString() in CALL_APPS) roots += it } } } catch (_: Throwable) {}
+        rootInActiveWindow?.let { r -> if (roots.none { it == r }) roots += r }
+        return roots
+    }
+
+    private val endCallLabel = Regex("end call|end video call|end voice call|hang ?up|leave call|leave|end", RegexOption.IGNORE_CASE)
+
+    private fun looksLikeEndCall(n: AccessibilityNodeInfo): Boolean {
+        val id = n.viewIdResourceName.orEmpty()
+        if (id.contains("end_call", true) || id.contains("endcall", true) || id.contains("hangup", true)) return true
+        return listOfNotNull(n.contentDescription, n.text).any { endCallLabel.matches(it.toString().trim()) }
+    }
+
+    /** Press the call app's own end-call button, found by its label or id. Returns false if we couldn't. */
     private fun tryHangUp(): Boolean {
-        val root = rootInActiveWindow ?: return false
-        val label = Regex("end call|end video call|hang ?up|leave call|leave|end", RegexOption.IGNORE_CASE)
-        val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
-        var seen = 0
-        while (queue.isNotEmpty() && seen < 500) {
-            val n = queue.removeFirst(); seen++
-            val desc = (n.contentDescription ?: n.text ?: n.viewIdResourceName)?.toString().orEmpty()
-            if (desc.isNotEmpty() && label.matches(desc.trim()) || n.viewIdResourceName?.contains("end_call", true) == true) {
-                var target: AccessibilityNodeInfo? = n
-                while (target != null && !target.isClickable) target = target.parent
-                if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
+        for (root in callRoots()) {
+            val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+            var seen = 0
+            while (queue.isNotEmpty() && seen < 800) {
+                val n = queue.removeFirst(); seen++
+                if (looksLikeEndCall(n)) {
+                    var target: AccessibilityNodeInfo? = n
+                    while (target != null && !target.isClickable) target = target.parent
+                    if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
+                }
+                for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
             }
-            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
         }
         return false
+    }
+
+    /** For debugging HANG UP on new phones/app versions: what buttons can we see on the call screen? */
+    private fun logCallButtons() {
+        val found = mutableListOf<String>()
+        for (root in callRoots()) {
+            val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+            var seen = 0
+            while (queue.isNotEmpty() && seen < 800 && found.size < 25) {
+                val n = queue.removeFirst(); seen++
+                if (n.isClickable) found += listOfNotNull(
+                    n.viewIdResourceName?.substringAfter(":id/"), n.contentDescription?.toString(), n.text?.toString()
+                ).joinToString("|").ifEmpty { n.className?.toString()?.substringAfterLast('.') ?: "?" }
+                for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        LiveLog.add("Call screen buttons (${callRoots().size} window(s)): ${found.joinToString(", ").ifEmpty { "none visible" }}")
     }
 
     private fun showOnce(key: String, level: WarningOverlay.Level, title: String, body: String, onHangUp: (() -> Unit)? = null) {
@@ -174,12 +209,22 @@ class CallWatcherService : AccessibilityService() {
     private fun hangUpFromOverlay() {
         if (tryHangUp()) { LiveLog.add("Hung up the call for the user."); overlay.hide(); return }
         overlay.hide() // so the tap reaches the call screen, not our card
+        revealControlsThenHangUp(attempt = 1)
+    }
+
+    /** Tap the call screen to bring back the hidden controls, then look for end-call for up to 2 s. Two tries. */
+    private fun revealControlsThenHangUp(attempt: Int) {
         val dm = resources.displayMetrics
         val tap = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(
             Path().apply { moveTo(dm.widthPixels / 2f, dm.heightPixels * 0.45f) }, 0, 60)).build()
-        val retry = Runnable {
-            if (tryHangUp()) LiveLog.add("Hung up the call for the user (after showing the call controls).")
-            else {
+        var waited = 0L
+        val poll = object : Runnable {
+            override fun run() {
+                if (tryHangUp()) { LiveLog.add("Hung up the call for the user (after showing the call controls, try $attempt)."); return }
+                waited += 250
+                if (waited < 2000) { main.postDelayed(this, 250); return }
+                if (attempt == 1) { revealControlsThenHangUp(attempt = 2); return } // the first tap may have HIDDEN them
+                logCallButtons()
                 LiveLog.add("Couldn't find the end-call button; asked the user to tap it.")
                 overlay.show(WarningOverlay.Level.DANGER, "Hang up now",
                     "Tap the red ✆ button at the bottom of the call screen. Then call them back on their usual number.",
@@ -187,10 +232,15 @@ class CallWatcherService : AccessibilityService() {
             }
         }
         val sent = dispatchGesture(tap, object : GestureResultCallback() {
-            override fun onCompleted(d: GestureDescription?) { main.postDelayed(retry, 450) }
-            override fun onCancelled(d: GestureDescription?) { main.postDelayed(retry, 450) }
+            override fun onCompleted(d: GestureDescription?) { main.postDelayed(poll, 250) }
+            override fun onCancelled(d: GestureDescription?) {
+                LiveLog.add("Tap on the call screen was cancelled (try $attempt)."); main.postDelayed(poll, 250)
+            }
         }, null)
-        if (!sent) main.postDelayed(retry, 100)
+        if (!sent) {
+            LiveLog.add("Couldn't tap the call screen: gestures not allowed. Turn the call watcher off and on once.")
+            main.postDelayed(poll, 100)
+        }
     }
 
     @RequiresApi(30)
