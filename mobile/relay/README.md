@@ -31,8 +31,8 @@ room with its own mum/son/daughter slots, so families never see each other.
 - **Monitor / scammer console:** `https://<host>/f/<FAMILY-CODE>/monitor.html#token=<MONITOR_TOKEN>`.
   Without the token (the part after `#` never reaches the server logs) the monitor is read-only: you can watch
   the traffic, but the presenter and scammer buttons send nothing.
-- On a public host, plain `/ws` is switched off (it would be one room shared with every stranger). Set
-  `ALLOW_DEFAULT_ROOM=1` to turn it back on.
+- On a public host (Fly, Railway, or any relay started with `PUBLIC=1`), plain `/ws` is switched off, because it
+  would be one room shared with every stranger. Set `ALLOW_DEFAULT_ROOM=1` to turn it back on.
 
 ### Limits
 
@@ -58,10 +58,34 @@ None of these use 4000 (both apps stop reconnecting on 4000; it only means "repl
 
 `GET /healthz` returns `{"ok":true, "rooms":…, "phones":…, "monitorLocked":true}`. Check it before going on stage.
 
-## Deploy on Fly.io (recommended: no sleeping, Singapore region)
+## Free: laptop + Docker + Cloudflare tunnel (what we use for the demo)
+
+The relay runs in Docker on the laptop, and a free Cloudflare quick tunnel gives it a public `https://` address. That
+means phones on mobile data can reach it too. No account or card is needed. The laptop must stay on, awake and online.
+
+From the **repo root** (Docker Desktop running):
+
+```bash
+docker build -f mobile/relay/Dockerfile -t family-verify-relay .
+docker run -d --name family-relay --restart unless-stopped -p 8000:8000   -e MONITOR_TOKEN=<long random secret> -e PUBLIC=1 family-verify-relay
+docker run -d --name family-tunnel --restart unless-stopped cloudflare/cloudflared:latest   tunnel --no-autoupdate --url http://host.docker.internal:8000
+docker logs family-tunnel        # shows the address: https://<random words>.trycloudflare.com
+```
+
+- **Keep `PUBLIC=1`:** the tunnel puts the laptop on the internet, so this gives it the same lockdown as a cloud host
+  (family codes only, and a token is required).
+- **Addresses:** phones use `wss://<random words>.trycloudflare.com/f/<FAMILY-CODE>` (Mum can use `https://`). The
+  monitor is the same address plus `/monitor.html#token=…`.
+- **The address changes** whenever the tunnel container restarts (for example after a reboot). Run
+  `docker logs family-tunnel` again and update the phones.
+- **Stop and start:** `docker stop family-relay family-tunnel` / `docker start family-relay family-tunnel`.
+- **Sleep:** set Windows sleep to Never while plugged in. A sleeping laptop drops every phone.
+
+## Deploy on Fly.io (no sleeping, Singapore region; needs a card)
 
 One-time setup: install `flyctl` (`iwr https://fly.io/install.ps1 -useb | iex` on Windows), then `fly auth signup`
-or `fly auth login`. Fly asks for a card even on the free allowance.
+or `fly auth login`. Without a card, trial machines stop every 5 minutes, which drops the phones, so Fly needs a
+card to be usable.
 
 From the **repo root**:
 
