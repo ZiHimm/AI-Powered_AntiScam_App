@@ -283,7 +283,8 @@ class MainActivity : AppCompatActivity() {
             family.isNotEmpty() -> "Family: ${family.joinToString(", ") { it.name.replaceFirstChar { c -> c.uppercase() } }}"
             else -> ""
         }
-        find<TextView>(R.id.home_family).apply { text = familyLine; visibility = if (familyLine.isEmpty()) View.GONE else View.VISIBLE }
+        find<TextView>(R.id.home_family).visibility = View.GONE   // the family card below shows everyone
+        renderFamilyCard()
         find<TextView>(R.id.home_last).text = LiveLog.callLine ?: "No video calls checked yet."
         find<Button>(R.id.btn_fix).apply {
             visibility = if (fix == null) View.GONE else View.VISIBLE
@@ -294,6 +295,66 @@ class MainActivity : AppCompatActivity() {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setOnClickListener { fix?.action?.invoke() }
         }
+    }
+
+    /** Home: "My family" card. Everyone, online status, senior / face / guardian tags, and Invite. */
+    private fun renderFamilyCard() {
+        val box = find<LinearLayout>(R.id.family_card)
+        box.removeAllViews()
+        val d = resources.displayMetrics.density
+        fun px(v: Int) = (v * d).toInt()
+        box.background = GradientDrawable().apply { cornerRadius = 22 * d; setColor(0xFF161B22.toInt()) }
+        fun label(t: String, sp: Float, c: Int, bold: Boolean = false) = TextView(this).apply {
+            text = t; textSize = sp; setTextColor(c); if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        fun pill(t: String, color: Int, onClick: () -> Unit) = TextView(this).apply {
+            text = t; textSize = 16f; setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER; setPadding(px(14), px(10), px(14), px(10))
+            background = GradientDrawable().apply { cornerRadius = 14 * d; setColor(color) }; setOnClickListener { onClick() }
+        }
+        fun row(name: String, sub: String, online: Boolean?) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, px(8), 0, px(8))
+            val hue = floatArrayOf((name.lowercase().hashCode() and 0x7fffffff) % 360f, 0.55f, 0.55f)
+            addView(TextView(context).apply {
+                text = name.take(1).uppercase(); textSize = 20f; setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, android.graphics.Typeface.BOLD)
+                gravity = android.view.Gravity.CENTER
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(android.graphics.Color.HSVToColor(hue)) }
+            }, LinearLayout.LayoutParams(px(46), px(46)))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(px(14), 0, 0, 0)
+                addView(label(name + when (online) { true -> "  🟢"; false -> "  ⚪"; null -> "" }, 19f, 0xFFE6EDF3.toInt(), bold = true))
+                if (sub.isNotEmpty()) addView(label(sub, 14f, 0xFF9DA7B3.toInt()))
+            })
+        }
+        val code = FamilyLink.familyCode
+        if (code == null && FamilyLink.members.isEmpty()) {
+            box.addView(label("👪 Your family", 20f, 0xFFE6EDF3.toInt(), bold = true))
+            box.addView(label("You're not connected to your family yet.", 16f, 0xFF9DA7B3.toInt()).apply { setPadding(0, px(4), 0, px(10)) })
+            box.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(pill("👑 Create", 0xFF2563EB.toInt()) { askCreateFamily() }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = px(8) })
+                addView(pill("📷 Join", 0xFF16A34A.toInt()) { scanInvite.launch(Intent(this@MainActivity, ScanActivity::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f))
+            })
+            return
+        }
+        val faces = FaceStore.load(this)
+        box.addView(label("👪 ${FamilyLink.familyName.ifBlank { "My family" }}", 20f, 0xFFE6EDF3.toInt(), bold = true))
+        val meTags = listOfNotNull(if (FamilyLink.senior) "senior" else null,
+            if (FamilyLink.protect) "calls checked" else null, if (faces.any { it.isOwner }) "face ✓" else "add your face")
+        box.addView(row("${FamilyLink.myName} (me)", meTags.joinToString(" · "), null))
+        for (m in FamilyLink.others()) {
+            val n = FamilyLink.nameOf(m.id)
+            val tags = listOfNotNull(
+                if (m.senior) "senior" else null,
+                if (faces.any { it.memberId == m.id || it.name.equals(n, true) }) "face ✓" else "no face yet",
+                if (FamilyLink.isGuardian(m.id) && FamilyLink.senior) "my guardian" else null,
+                if (m.senior && m.guardians.contains(FamilyLink.me)) "I'm their guardian" else null)
+            box.addView(row(n, tags.joinToString(" · "), m.online))
+        }
+        if (FamilyLink.members.isEmpty()) box.addView(label("Just you so far.", 16f, 0xFF9DA7B3.toInt()).apply { setPadding(0, px(4), 0, 0) })
+        if (code != null) box.addView(pill("➕ Invite family", 0xFF2563EB.toInt()) {
+            startActivity(Intent(this, InviteActivity::class.java))
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })
     }
 
     private fun showAdvanced(show: Boolean) {

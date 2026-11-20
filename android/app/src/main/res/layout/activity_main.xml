@@ -43,6 +43,14 @@
             android:textColor="#8B949E"
             android:textSize="15sp" />
 
+        <LinearLayout
+            android:id="@+id/family_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:padding="16dp" />
+
         <Button
             android:id="@+id/btn_inbox"
             style="@style/Btn"
@@ -66,61 +74,63 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-        <!-- 1. Setup -->
-        <TextView style="@style/Section" android:text="1 · Turn on protection" />
-
-        <TextView android:id="@+id/status_service" style="@style/Body" />
-        <Button android:id="@+id/btn_service" style="@style/Btn" android:text="Open Accessibility settings" />
-
-        <TextView android:id="@+id/status_notif" style="@style/Body" />
-        <Button android:id="@+id/btn_notif" style="@style/Btn" android:text="Allow notifications" />
-
-        <TextView android:id="@+id/status_android" style="@style/Body" />
-
-        <TextView android:id="@+id/status_battery" style="@style/Body" />
-        <Button android:id="@+id/btn_battery" style="@style/Btn" android:text="Don't let battery saver stop it" />
-
-        <!-- 2. Faces -->
-        <TextView style="@style/Section" android:text="2 · Family faces" />
-        <TextView
-            style="@style/Body"
-            android:text="Tap 📷 to take 3 quick selfies of each person (or 🖼 to pick photos). Add yourself too (tick “This is me”) so your own camera preview is ignored. Only face embeddings are kept, never the photos." />
-
-        <LinearLayout
-            android:id="@+id/people"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <Button android:id="@+id/btn_add_person" style="@style/Btn" android:text="+ Add person" />
-
-        <!-- 3. Test -->
-        <TextView style="@style/Section" android:text="3 · Test without a call" />
-        <Button android:id="@+id/btn_test" style="@style/Btn" android:text="Check a photo" />
-        <Button android:id="@+id/btn_preview" style="@style/Btn" android:text="Preview the warning" />
-        <TextView android:id="@+id/test_result" style="@style/Body" />
-
-        <TextView android:id="@+id/threshold_label" style="@style/Body" />
-        <SeekBar
-            android:id="@+id/threshold"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="80" />
-
-        <!-- 4. Family relay -->
-        <TextView style="@style/Section" android:text="4 · Family phones" />
-        <TextView
-            style="@style/Body"
-            android:text="Connect to the family relay (cloud address, or the laptop). Same address on every family phone. When a caller looks like a family member, the REAL person is asked on their own phone. Add YOUR face in section 2 (tick “This is me”): it's shared with the family's phones, signed, no photo." />
-
-        <TextView android:id="@+id/family_line" style="@style/Body" android:textSize="17sp" android:textStyle="bold" />
+        <!-- ============ 👪 MY FAMILY ============ -->
+        <TextView style="@style/Section" android:text="👪 My family" />
+        <TextView android:id="@+id/family_line" style="@style/Body" android:textSize="18sp" android:textStyle="bold" />
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
             <Button android:id="@+id/btn_create_family" style="@style/Btn" android:layout_width="0dp" android:layout_weight="1" android:text="👑 Create family" />
             <Button android:id="@+id/btn_join_family" style="@style/Btn" android:layout_width="0dp" android:layout_weight="1" android:layout_marginStart="8dp" android:text="📷 Join family" />
         </LinearLayout>
         <Button android:id="@+id/btn_invite" style="@style/Btn" android:layout_width="match_parent" android:text="➕ Invite someone (QR code / link)" />
-        <TextView style="@style/Body" android:text="Or type a relay address by hand:" android:textColor="#8B949E" android:textSize="13sp" />
 
+        <TextView android:id="@+id/me_line" style="@style/Body" android:layout_marginTop="16dp" android:textSize="17sp" android:textStyle="bold" />
+        <Switch android:id="@+id/elder_on" style="@style/Body" android:text="I'm a senior citizen: alert my guardians if a scammer targets me" />
+        <Switch android:id="@+id/protect_on" style="@style/Body" android:text="Check my incoming video calls on this phone" />
+        <TextView style="@style/Body" android:layout_marginTop="12dp" android:text="My guardians (get alerts if a scammer targets me):" android:textColor="#8B949E" />
+        <LinearLayout android:id="@+id/guardians_box" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+
+        <TextView style="@style/Body" android:layout_marginTop="12dp" android:text="Family secret question (asked when someone can't confirm in time):" android:textColor="#8B949E" />
+        <EditText
+            android:id="@+id/secret_q"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Family secret question"
+            android:inputType="textCapSentences"
+            android:textColor="#E6EDF3"
+            android:textColorHint="#6E7681" />
+        <TextView android:id="@+id/reply_label" style="@style/Body" />
+        <SeekBar
+            android:id="@+id/reply_s"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="50" />
+        <Button android:id="@+id/btn_change_role" style="@style/Btn" android:text="✏️ Change my name / setup" />
+
+        <!-- ============ 🛡️ MY PROTECTION ============ -->
+        <TextView style="@style/Section" android:text="🛡️ My protection" />
+        <TextView android:id="@+id/status_service" style="@style/Body" />
+        <Button android:id="@+id/btn_service" style="@style/Btn" android:text="Open Accessibility settings" />
+        <TextView android:id="@+id/status_notif" style="@style/Body" />
+        <Button android:id="@+id/btn_notif" style="@style/Btn" android:text="Allow notifications" />
+        <TextView android:id="@+id/status_battery" style="@style/Body" />
+        <Button android:id="@+id/btn_battery" style="@style/Btn" android:text="Don't let battery saver stop it" />
+        <TextView android:id="@+id/status_android" style="@style/Body" />
+
+        <TextView style="@style/Body" android:layout_marginTop="16dp" android:textSize="17sp" android:textStyle="bold" android:text="Faces this phone recognises" />
+        <TextView
+            style="@style/Body"
+            android:textColor="#8B949E"
+            android:text="Your own face (“me”) is shared with your family automatically. Family members' faces arrive from their phones; you can also add someone here with 📷 selfies or 🖼 a photo. Only face numbers are kept, never photos." />
+        <LinearLayout
+            android:id="@+id/people"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+        <Button android:id="@+id/btn_add_person" style="@style/Btn" android:text="+ Add a face" />
+
+        <!-- ============ 🔧 ADVANCED ============ -->
+        <TextView style="@style/Section" android:text="🔧 Advanced (testing &amp; demo)" />
+        <TextView style="@style/Body" android:text="Relay address (filled in by Create / Join family):" android:textColor="#8B949E" android:textSize="13sp" />
         <EditText
             android:id="@+id/relay_addr"
             android:layout_width="match_parent"
@@ -131,41 +141,22 @@
             android:singleLine="true"
             android:textColor="#E6EDF3"
             android:textColorHint="#6E7681" />
-
-        <Switch
-            android:id="@+id/family_on"
-            style="@style/Body"
-            android:text="Connect to family relay" />
+        <Switch android:id="@+id/family_on" style="@style/Body" android:text="Connect to family relay" />
         <TextView android:id="@+id/family_status" style="@style/Body" android:textSize="13sp" />
 
-        <TextView android:id="@+id/me_line" style="@style/Body" android:textSize="17sp" android:textStyle="bold" />
-        <Switch android:id="@+id/protect_on" style="@style/Body" android:text="Check my incoming video calls on this phone" />
-        <Switch android:id="@+id/elder_on" style="@style/Body" android:text="I'm a senior citizen: alert my guardians if a scammer targets me" />
-        <TextView style="@style/Body" android:text="My guardians (get alerts about my calls):" android:textColor="#8B949E" />
-        <LinearLayout android:id="@+id/guardians_box" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
-
-        <EditText
-            android:id="@+id/secret_q"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Family secret question"
-            android:inputType="textCapSentences"
-            android:textColor="#E6EDF3"
-            android:textColorHint="#6E7681" />
-
-        <TextView android:id="@+id/reply_label" style="@style/Body" />
+        <Button android:id="@+id/btn_sim_son" style="@style/Btn" android:text="Test: a call that looks like…" />
+        <Button android:id="@+id/btn_test" style="@style/Btn" android:text="Check a photo" />
+        <Button android:id="@+id/btn_preview" style="@style/Btn" android:text="Preview the warning" />
+        <TextView android:id="@+id/test_result" style="@style/Body" />
+        <TextView android:id="@+id/threshold_label" style="@style/Body" />
         <SeekBar
-            android:id="@+id/reply_s"
+            android:id="@+id/threshold"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="50" />
-
-        <Button android:id="@+id/btn_sim_son" style="@style/Btn" android:text="Test: a call that looks like Son" />
+            android:max="80" />
         <Button android:id="@+id/btn_forget_keys" style="@style/Btn" android:text="Forget paired family keys" />
-        <Button android:id="@+id/btn_change_role" style="@style/Btn" android:text="Change my name / setup" />
 
-        <!-- 4. Log -->
-        <TextView style="@style/Section" android:text="Activity" />
+        <TextView style="@style/Section" android:text="Activity log" />
         <TextView
             android:id="@+id/log"
             android:layout_width="match_parent"
