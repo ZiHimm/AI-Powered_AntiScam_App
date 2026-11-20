@@ -191,7 +191,13 @@ function connect() {
   };
   ws.onclose = (ev) => {
     net.ok = false;
-    setNetStatus(false, ev.code === 4000 ? 'another phone took this role' : '');
+    if (ev.code === 4000) {
+      // another phone connected with the same role: don't fight over it, wait for the user
+      setNetStatus(false, `another phone is using the ${nm(ROLE)} role. Tap "Save & reconnect" to take it back`);
+      log('warn', `Disconnected: another phone connected as ${nm(ROLE)}. Two phones can't share a role.`);
+      return;
+    }
+    setNetStatus(false);
     net.timer = setTimeout(connect, 1500);
   };
   ws.onerror = () => {};
@@ -512,7 +518,7 @@ async function startCall(source = 'camera') {
   Object.assign(call, {
     active: true, id: randHex(4), status: 'scanning', answered: source === 'whatsapp', startedAt: now(),
     target: null, req: null, streak: { key: null, since: 0, count: 0 }, lastObs: null,
-    secretOpen: false, warn: null, blurNotified: false, notified: [], source,
+    secretOpen: false, warn: null, blurNotified: false, notified: [], source, lateNonce: null,
   });
   const gen = ++callGen;
   $('#mum-home').hidden = true;
@@ -641,6 +647,26 @@ async function receiveReply(relayFrom, env) {
 
 function onReply(id, nonce, answer) {
   const req = call.req;
+  // a genuine (signed) reply to THIS call's request that arrived after the reply window closed
+  if (answer !== 'timeout' && call.active && nonce && nonce === call.lateNonce && id === call.target) {
+    call.lateNonce = null; // still single-use
+    if (answer === 'no' && ['C', 'secret-ok', 'secret-fail'].includes(call.status)) {
+      call.status = 'B';
+      log('info', `🔴 ${nm(id)} replied late, but says it is NOT them. Escalating to State B.`);
+      if (store.elderMode) {
+        alertGuardians({
+          level: 'urgent', about: id,
+          title: `🚨 Someone pretending to be ${nm(id)} is video-calling Mum`,
+          body: `${nm(id)} confirmed (late) that it's NOT them. Mum has been told to hang up.`,
+        });
+      }
+      renderMum();
+      mumNotify();
+    } else {
+      log('info', `⏱ ${nm(id)}'s "${esc(answer)}" arrived after the reply window closed. Ignored: a late "yes" never turns the screen green.`);
+    }
+    return;
+  }
   if (!call.active || !req || req.nonce !== nonce || call.status !== 'verifying') {
     if (answer !== 'timeout') log('attack', `✗ Ignored reply from ${nm(id)}: nonce ${code(String(nonce).slice(0, 8) + '…')} doesn't match an open request (stale or replayed)`);
     return;
@@ -667,6 +693,7 @@ function onReply(id, nonce, answer) {
   } else {
     call.status = 'C';
     call.secretOpen = true;
+    call.lateNonce = nonce; // a late signed "No" for this request can still escalate to SCAM
     sendTo(id, { kind: 'expire-ping', nonce }, 'Expiry notice');
     log('info', `🟠 State C: no reply from ${who} in ${store.replyTimeout}s. Can't verify.`);
     if (store.elderMode) {
@@ -993,6 +1020,7 @@ class MemberPhone {
     this.el = $('#phone-member');
     this.list = $('.notifs', this.el);
     this.seenNonces = new Set(JSON.parse(sessionStorage.getItem(NS('seen')) || '[]'));
+    this.closed = new Set();  // request nonces Mum has already expired or cancelled
     this.pings = new Map();   // nonce -> card
     this.alerts = new Map();  // callId -> card
     this.shared = new Map();  // callId -> [text]
@@ -1033,7 +1061,10 @@ class MemberPhone {
     this.buzz();
     osNotify('Are you calling Mum right now?', 'Someone who looks like you is video-calling Mum. Open to answer.', { urgent: true });
     log('push', `${this.name}'s phone received the verification request`);
+    if (this.isClosed(req)) this.expirePing(req.nonce); // arrived after Mum already gave up / hung up
   }
+  // closed by Mum, or past its deadline (2 s grace for phone clocks that differ slightly)
+  isClosed(req) { return this.closed.has(req.nonce) || now() > req.expires + 2000; }
 
   async answer(req, answer, el) {
     $$('button', el).forEach((b) => { b.disabled = true; });
@@ -1045,14 +1076,21 @@ class MemberPhone {
 
     const env = await sign({ type: 'verify-reply', nonce: req.nonce, answer, from: this.id, ts: now() });
     log('push', `${this.name}'s phone → Mum: ${code({ nonce: req.nonce.slice(0, 8) + '…', answer, sig: env.sig.slice(0, 14) + '…' })}`);
+    // still sent when late: Mum uses a late "No" to escalate to SCAM, and ignores a late "Yes"
+    const late = this.isClosed(req);
     const sent = sendTo('mum', { kind: 'reply', env }, 'Reply');
-    el.className = `card ${answer === 'yes' ? 'done-green' : 'done-red'}`;
+    el.className = `card ${late ? 'muted' : answer === 'yes' ? 'done-green' : 'done-red'}`;
     $('.acts', el)?.remove();
     $('.countdown', el)?.remove();
     $('.d', el).innerHTML = !sent ? '⚠️ Couldn\'t reach Mum\'s phone. Call her directly.'
-      : answer === 'yes'
-        ? '✓ You confirmed. Mum\'s screen shows green.'
-        : `✓ Mum has been warned to hang up.${req.elder ? ' Her guardians were alerted.' : ''}`;
+      : late
+        // worded to stay true whichever Mum app is used (the native detector ignores late replies)
+        ? (answer === 'no'
+          ? '⏱ Too late for the check. Your "not me" was still sent to Mum\'s phone. Call her now to be sure.'
+          : '⏱ Too late: the request had already expired. Mum still sees a warning. Call her directly.')
+        : answer === 'yes'
+          ? '✓ You confirmed. Mum\'s screen shows green.'
+          : `✓ Mum has been warned to hang up.${req.elder ? ' Her guardians were alerted.' : ''}`;
   }
   async fakeBio() {
     const bio = $('.bio', this.el);
@@ -1069,6 +1107,7 @@ class MemberPhone {
   }
 
   expirePing(nonce) {
+    this.closed.add(nonce);
     const el = this.pings.get(nonce);
     if (!el || !$('.acts', el)) return;
     el.classList.add('muted');
@@ -1077,6 +1116,7 @@ class MemberPhone {
     $('.d', el).textContent = 'Expired. Mum was told you didn\'t reply.';
   }
   cancelPing(nonce) {
+    this.closed.add(nonce);
     const el = this.pings.get(nonce);
     if (!el || !$('.acts', el)) return;
     el.classList.add('muted');
