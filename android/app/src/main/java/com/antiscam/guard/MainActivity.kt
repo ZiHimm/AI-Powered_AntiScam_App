@@ -480,7 +480,7 @@ class MainActivity : AppCompatActivity() {
             "I'm ${FamilyLink.myName} (id \"$me\")${if (FamilyLink.senior) " · senior citizen" else ""}"
         val faces = FaceStore.load(this)
         val lines = mutableListOf(FamilyLink.status, "This phone: key ${DeviceKey.fingerprint}" +
-            if (faces.none { it.isOwner }) " · ⚠️ add YOUR face in section 2 (tick “This is me”) so the family's phones know you" else " · my face ✓")
+            if (faces.none { it.isOwner }) " · ⚠️ add YOUR face (🛡️ My protection → + Add a face, tick “This is me”) so the family's phones know you" else " · my face ✓")
         for (m in FamilyLink.others()) {
             val name = FamilyLink.nameOf(m.id)
             val online = if (m.online) "🟢" else "⚪"
