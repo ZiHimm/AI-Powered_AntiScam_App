@@ -36,6 +36,7 @@ demo: it runs the same verification logic in a browser, with three simulated pho
 | [`android/`](android/) | **Native Android app**: detects real WhatsApp/Instagram video calls in the background and checks the face | Proving the detection is real |
 | [`mobile/`](mobile/) | **3-phone family demo**: the same app on Mum's, Son's and Daughter's phones, linked by a laptop relay, with a projector monitor and scammer console | The live "Are you calling Mum?" demo on real phones |
 | root (`index.html`, `app.js`…) | **Web simulation**: all three phones on one page, [live on GitHub Pages](https://zihimm.github.io/AI-Powered_AntiScam_App/) | Explaining the flow, and backup if phones or Wi-Fi fail |
+| [`docs/`](docs/) | **[Project status](docs/STATUS.md)** (what's built, tested, open, who owns it), real-phone test reports, team notes | Catching up, and the setup checklist before going on stage |
 
 ---
 
