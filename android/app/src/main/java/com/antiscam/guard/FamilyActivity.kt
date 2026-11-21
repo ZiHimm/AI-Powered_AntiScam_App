@@ -191,9 +191,10 @@ class FamilyActivity : AppCompatActivity() {
                 if (urgent) box.addView(row(
                     bigButton(if (c.called) "📞 Calling ${c.calleeName}…" else "📞 Call ${c.calleeName} now", 0xFF16A34A.toInt(), enabled = !c.called) {
                         MemberHub.callCallee(c)
-                        FamilyLink.members[c.from]?.phone?.takeIf { it.isNotBlank() }?.let { n ->
-                            startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$n")))
-                        }
+                        val n = FamilyLink.members[c.from]?.phone?.takeIf { it.isNotBlank() }
+                        if (n != null) startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$n")))
+                        else android.widget.Toast.makeText(this, "${c.calleeName} hasn't added a phone number in the app. " +
+                            "Their screen now says you're calling: call them on WhatsApp or from your contacts.", android.widget.Toast.LENGTH_LONG).show()
                     },
                     bigButton(if (c.warned) "✓ Sent to ${c.calleeName}" else "⚠️ Tell ${c.calleeName} to hang up", 0xFFDC2626.toInt(), enabled = !c.warned) { MemberHub.warnCallee(c) }))
                 c.shared.forEach { box.addView(text(it, 15f, white, top = 6)) }

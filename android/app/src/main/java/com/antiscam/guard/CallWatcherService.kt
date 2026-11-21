@@ -64,7 +64,7 @@ class CallWatcherService : AccessibilityService() {
         engine = FaceEngine.get(this)
         overlay = WarningOverlay(this)
         FamilyLink.init(this)
-        family = FamilyCheck(overlay) { hangUpFromOverlay() }
+        family = FamilyCheck(this, overlay) { hangUpFromOverlay() }
         FamilyLink.listeners.add(family)
         MemberHub.init(this); FamilyLink.listeners.add(MemberHub)
         if (FamilyLink.enabled && !FamilyLink.connected) FamilyLink.start()   // FamilyService normally owns it
@@ -339,6 +339,7 @@ class CallWatcherService : AccessibilityService() {
         if (family.handling) {
             val role = FamilyLink.roleForName(top) ?: return
             val asked = family.targetRole
+            if (role == asked) return   // still the person we asked: nothing new
             if (!isFaceSwap(asked, role, recentFamily)) {
                 // the person already asked is still on screen: someone JOINED the call, it wasn't a face swap
                 if (joinLogged.add(role)) LiveLog.add("${FamilyLink.nameOf(role)} joined ${FamilyLink.nameOf(asked ?: "")} on the call. Not asking again.")

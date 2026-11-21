@@ -19,6 +19,7 @@ import com.antiscam.guard.WarningOverlay.Style
  * Runs on the main thread.
  */
 class FamilyCheck(
+    private val ctx: android.content.Context,
     private val overlay: WarningOverlay,
     private val hangUp: () -> Unit,
 ) : FamilyLink.Listener {
@@ -35,6 +36,8 @@ class FamilyCheck(
 
     private val main = Handler(Looper.getMainLooper())
     private var call: Call? = null
+    private var ended: Call? = null      // the last call, if it ended while waiting for an answer: a late signed "No" still counts
+    private var endedAt = 0L
 
     /** Who was asked for this call (role), if anyone. */
     val targetRole: String? get() = call?.target
@@ -52,6 +55,7 @@ class FamilyCheck(
         main.removeCallbacksAndMessages(null)
         if (c.status == "verifying") c.nonce?.let { n -> c.target?.let { FamilyLink.sendTo(it, JSONObject().put("kind", "cancel-ping").put("nonce", n)) } }
         call = null
+        if (c.target != null && (c.status == "verifying" || c.expiredNonce != null)) { ended = c; endedAt = System.currentTimeMillis() }
         if (!quiet) FamilyLink.log("info", "📴 Call ended (${c.app}).")
     }
 
@@ -176,6 +180,22 @@ class FamilyCheck(
 
     private fun onReply(role: String, nonce: String, answer: String) {
         val c = call
+        // Answer to the question of a call that already ended (hung up while they were confirming): within 2 minutes,
+        // signed by the person asked, same nonce. A "No" means that call WAS a scam: tell me and my guardians.
+        val e = ended
+        if (answer != "timeout" && e != null && e !== c && e.target == role && (e.nonce == nonce || e.expiredNonce == nonce) &&
+            System.currentTimeMillis() - endedAt < 120_000) {
+            ended = null // single use
+            val who = FamilyLink.nameOf(role)
+            if (answer == "no") {
+                FamilyLink.log("info", "🔴 Late reply: $who says the ${e.app} call that just ended was NOT them. It was a scam.")
+                alertGuardians(e, "urgent", "🚨 Someone pretending to be $who video-called ${me()}",
+                    "$who confirmed (after the call ended) that it was NOT them. Please check on ${me()}.", about = role)
+                Notifier.familyAlert(ctx, "⛔ That call was a scam", "The real $who says the ${e.app} call that just ended was NOT them. " +
+                    "Don't send money or share codes, even if they call back.", urgent = true)
+            } else FamilyLink.log("info", "$who confirmed after the call ended: it was really them.")
+            return
+        }
         // Late answer to the request that just expired (same call, same nonce, signed by the right phone)
         if (c != null && c.expiredNonce == nonce && c.target == role && answer != "timeout") {
             val who = FamilyLink.nameOf(role)
@@ -190,7 +210,7 @@ class FamilyCheck(
             return
         }
         if (c == null || c.status != "verifying" || c.nonce != nonce || c.target != role) {
-            if (answer != "timeout") FamilyLink.log("attack", "✗ Ignored a reply from ${FamilyLink.nameOf(role)}: it doesn't match an open request (stale or replayed)")
+            if (answer != "timeout") FamilyLink.log("attack", "✗ Ignored a reply from ${FamilyLink.nameOf(role)}: no open question matches it (too late, or replayed)")
             return
         }
         main.removeCallbacksAndMessages(null)

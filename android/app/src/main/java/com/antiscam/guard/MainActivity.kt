@@ -258,6 +258,11 @@ class MainActivity : AppCompatActivity() {
         }
         // first problem wins: (level, title, detail, fix)
         val (level, detail, fix) = when {
+            !FamilyLink.protect && !Notifier.canPost(this) -> Triple(1,
+                "Notifications are off, so family questions (\"Are you calling…?\") and alerts can't pop up on this phone.",
+                Fix("Allow notifications") { find<Button>(R.id.btn_notif).performClick() })
+            !FamilyLink.protect && FamilyLink.enabled && !isBatteryExempt() -> Triple(1,
+                "Battery saver may disconnect this phone from the family.", Fix("Keep me connected") { requestBatteryExemption() })
             !FamilyLink.protect -> Triple(if (FamilyLink.connected) 0 else 1,
                 "My calls aren't checked on this phone. I'll be asked when someone who looks like me calls the family.",
                 if (FamilyLink.enabled) null else Fix("Connect to my family") { startActivity(Intent(this, SetupActivity::class.java)) })
@@ -372,11 +377,25 @@ class MainActivity : AppCompatActivity() {
         getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: true
 
     private fun requestBatteryExemption() {
+        if (Build.MANUFACTURER.lowercase() in setOf("xiaomi", "redmi", "poco")) { xiaomiSteps(); return }
         try {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         } catch (_: Throwable) {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) // some phones hide the direct prompt
         }
+    }
+
+    /** Xiaomi/Redmi/POCO (MIUI, HyperOS) kill background apps unless Autostart is on and battery is "No restrictions". */
+    private fun xiaomiSteps() {
+        AlertDialog.Builder(this).setTitle("Keep AntiScam Guard running (Xiaomi)")
+            .setMessage("Xiaomi phones close background apps, which disconnects you from your family.\n\n" +
+                "1. Autostart: ON\n2. Battery saver: No restrictions\n\nBoth are on the app's info page that opens next. " +
+                "Also lock the app in Recent apps (pull its card down until the padlock shows).")
+            .setPositiveButton("Open app settings") { _, _ ->
+                try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) } catch (_: Throwable) {}
+            }
+            .setNegativeButton("Later", null).show()
+        try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } catch (_: Throwable) {}
     }
 
     private fun refreshServiceStatus() {
@@ -463,7 +482,7 @@ class MainActivity : AppCompatActivity() {
             val n = FaceShare.syncNow()
             toast(if (n == 0) "Not connected to any family phone right now" else "Asked $n family phone(s) to share faces. Updates in a few seconds.")
         }
-        find<Button>(R.id.btn_change_role).setOnClickListener { startActivity(Intent(this, SetupActivity::class.java)) }
+        find<Button>(R.id.btn_change_role).setOnClickListener { askWhoAmI() }   // name, phone, senior, check my calls
         find<Button>(R.id.btn_create_family).setOnClickListener { askCreateFamily() }
         find<Button>(R.id.btn_join_family).setOnClickListener { scanInvite.launch(Intent(this, ScanActivity::class.java)) }
         find<Button>(R.id.btn_invite).setOnClickListener {
@@ -563,11 +582,11 @@ class MainActivity : AppCompatActivity() {
             .setView(form)
             .setPositiveButton("📷 Take selfies") { _, _ ->
                 val n = name.text.toString().trim()
-                if (n.isEmpty()) toast("Enter a name first") else takeSelfies(n, owner.isChecked)
+                if (n.isEmpty()) toast("Enter a name first") else takeSelfies(n, owner.isChecked || n.equals(FamilyLink.myName, ignoreCase = true))
             }
             .setNeutralButton("Choose photo") { _, _ ->
                 val n = name.text.toString().trim()
-                if (n.isEmpty()) toast("Enter a name first") else pick(Pick.Enrol(n, owner.isChecked))
+                if (n.isEmpty()) toast("Enter a name first") else pick(Pick.Enrol(n, owner.isChecked || n.equals(FamilyLink.myName, ignoreCase = true)))
             }
             .setNegativeButton("Cancel", null)
             .show()
