@@ -48,8 +48,9 @@ class SetupActivity : AppCompatActivity() {
     private val scan = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         r.data?.getStringExtra("invite")?.let { Invite.parse(it) }?.let { pendingInvite = it; show(Step.FAMILY) }
     }
+    private var sharedWith = -1   // phones my face was just sent to (-1: not taken in this session)
     private val selfies = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        if ((r.data?.getIntExtra(EnrolActivity.EXTRA_ADDED, 0) ?: 0) > 0) FaceShare.sendMyFace()
+        if ((r.data?.getIntExtra(EnrolActivity.EXTRA_ADDED, 0) ?: 0) > 0) sharedWith = FaceShare.sendMyFace()
         show(Step.FACE)
     }
     private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { show(step) }
@@ -60,6 +61,9 @@ class SetupActivity : AppCompatActivity() {
         // a brand-new phone: record "not finished" explicitly, so naming yourself in step 1 doesn't count as done
         if (FamilyLink.myRole == null) FamilyLink.setupDone = false
         pendingInvite = intent.getStringExtra(EXTRA_INVITE)?.let { Invite.parse(it) }
+        // resumed after the app was closed (a big camera step can do that on real phones): reconnect to the family, else
+        // the face taken next would have nowhere to go
+        if (FamilyLink.familyCode != null && FamilyLink.enabled && !FamilyLink.connected) connect()
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(24), px(28), px(24), px(28)) }
         setContentView(ScrollView(this).apply { setBackgroundColor(bg); isFillViewport = true; addView(body) })
         show(resumeStep())
@@ -221,11 +225,14 @@ class SetupActivity : AppCompatActivity() {
 
     private fun face() {
         header(3, "Add your face")
-        val mine = FaceStore.load(this).firstOrNull { it.isOwner }
+        val mine = FaceStore.owner(this, FamilyLink.myName)
         add(text("So your family's phones can recognise you on a video call. Only a set of numbers is kept and shared, never a photo.", 18f, muted, top = 8))
         if (mine != null) {
             add(cardOf(text("✅ Your face is added (${mine.embeddings.size} samples)", 20f, fg, bold = true),
-                text("It's shared with your family's phones automatically.", 16f, muted, top = 4)), top = 16)
+                text(when {
+                    sharedWith > 0 -> "✓ Sent to $sharedWith family phone(s). Others get it when they come online."
+                    else -> "It's sent to your family's phones automatically, as soon as they're online."
+                }, 16f, muted, top = 4)), top = 16)
             add(button("Next", blue, top = 20) { show(Step.PROTECT) })
             add(button("Take them again", 0xFF30363D.toInt(), top = 10) { takeSelfies() })
         } else {
@@ -237,7 +244,7 @@ class SetupActivity : AppCompatActivity() {
 
     private fun takeSelfies() {
         // replace any old samples of "me", then take fresh ones
-        FaceStore.load(this).firstOrNull { it.isOwner }?.let { FaceStore.remove(this, it.name) }
+        FaceStore.load(this).firstOrNull { it.isOwner }?.let { FaceStore.remove(this, it) }
         selfies.launch(Intent(this, EnrolActivity::class.java)
             .putExtra(EnrolActivity.EXTRA_NAME, FamilyLink.myName).putExtra(EnrolActivity.EXTRA_OWNER, true))
     }

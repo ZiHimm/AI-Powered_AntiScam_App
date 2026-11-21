@@ -282,6 +282,7 @@ object FamilyLink {
         }
         val m = members.getOrPut(from) { Member(from) }
         val first = !m.v2
+        LiveLog.add("Profile from ${p.optString("name", from)} (${if (first) "first" else "update"})")
         m.name = p.optString("name", m.name); m.senior = p.optBoolean("senior"); m.protect = p.optBoolean("protect")
         m.v2 = true
         m.phone = p.optString("phone")

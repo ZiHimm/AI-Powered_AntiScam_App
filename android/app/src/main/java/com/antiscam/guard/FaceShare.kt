@@ -21,22 +21,31 @@ object FaceShare {
 
     /**
      * Send my enrolled face to [to], or to every online step-2 member. Re-sent whenever a member comes online, so a phone
-     * that was off when the face changed still gets it. With no face enrolled (deleted), an empty list is sent, so the
-     * other phones drop their copy.
+     * that was off when the face changed still gets it. If the owner deleted their face, an empty list is sent, so the
+     * other phones drop their copy. Returns how many phones it was sent to.
      */
-    fun sendMyFace(to: String? = null) {
-        if (!::app.isInitialized || !FamilyLink.connected) return
-        val mine = FaceStore.load(app).firstOrNull { it.isOwner } ?: Person(FamilyLink.myName, true, mutableListOf())
+    fun sendMyFace(to: String? = null): Int {
+        if (!::app.isInitialized) return 0
+        if (!FamilyLink.connected) { LiveLog.add("Face not shared yet: not connected to the family (it's sent when you reconnect)"); return 0 }
+        val mine = FaceStore.owner(app, FamilyLink.myName)
+            ?: if (FaceStore.ownerRemoved(app)) Person(FamilyLink.myName, true, mutableListOf())   // deleted: tell them to drop it
+            else { if (to == null) LiveLog.add("Face not shared: no face marked as mine on this phone (add one with “This is me”)"); return 0 }
         val targets = if (to != null) listOf(to) else FamilyLink.members.values.filter { it.online && it.v2 }.map { it.id }
-        if (targets.isEmpty()) return
+        if (targets.isEmpty()) {
+            LiveLog.add("Face not shared yet: no family phone online (" +
+                FamilyLink.members.values.joinToString { "${it.id} online=${it.online} v2=${it.v2}" }.ifEmpty { "none" } +
+                "). It's sent when they come online.")
+            return 0
+        }
         val payload = JSONObject().put("type", "face").put("v", 2).put("model", MODEL).put("from", FamilyLink.me)
             .put("name", FamilyLink.myName).put("ts", System.currentTimeMillis())
             .put("embeddings", JSONArray().apply { mine.embeddings.forEach { e -> put(JSONArray().apply { e.forEach { put(it.toDouble()) } }) } })
         val body = JSONObject().put("kind", "face").put("env", DeviceKey.sign(payload))
         val sent = targets.filter { FamilyLink.sendTo(it, body) }
         if (sent.isNotEmpty()) FamilyLink.log("face", if (mine.embeddings.isEmpty())
-            "Told ${sent.joinToString { FamilyLink.nameOf(it) }} I have no face enrolled (they remove their copy)"
+            "Told ${sent.joinToString { FamilyLink.nameOf(it) }} I removed my face (they delete their copy)"
             else "Shared my face (${mine.embeddings.size} sample(s), signed, no photo) with ${sent.joinToString { FamilyLink.nameOf(it) }}")
+        return sent.size
     }
 
     private val asked = mutableMapOf<String, Long>()

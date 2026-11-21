@@ -52,8 +52,11 @@ class MainActivity : AppCompatActivity() {
     }
     private val selfies = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val n = r.data?.getIntExtra(EnrolActivity.EXTRA_ADDED, 0) ?: 0
-        if (n > 0) toast("Added $n face sample(s)")
-        if (n > 0) FaceShare.sendMyFace()   // if it was my own face, the family's phones get it (signed)
+        if (n > 0) {
+            // if it was my own face, the family's phones get it (signed)
+            val sent = if (FaceStore.load(this).any { it.isOwner }) FaceShare.sendMyFace() else -1
+            toast("Added $n face sample(s)" + when { sent > 0 -> ". Sent to $sent family phone(s)"; sent == 0 -> ". It's sent to your family when they're online"; else -> "" })
+        }
         renderPeople()
     }
 
@@ -539,7 +542,7 @@ class MainActivity : AppCompatActivity() {
                 text = "✕"; setOnClickListener {
                     AlertDialog.Builder(this@MainActivity)
                         .setMessage("Remove ${p.name} and their face data?")
-                        .setPositiveButton("Remove") { _, _ -> FaceStore.remove(this@MainActivity, p.name); if (p.isOwner) FaceShare.sendMyFace(); renderPeople() }
+                        .setPositiveButton("Remove") { _, _ -> FaceStore.remove(this@MainActivity, p); if (p.isOwner) FaceShare.sendMyFace(); renderPeople() }
                         .setNegativeButton("Cancel", null).show()
                 }
             })
