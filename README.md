@@ -1,137 +1,115 @@
-# AI-Powered Anti-Scam · Zero-Trust Video Call Protection
+# AntiScam Guard
 
-Scammers now use deepfaked faces and voices on **WhatsApp and Instagram video calls** to pose as a family member and
-ask for money. This app runs quietly in the background on an elderly person's Android phone. When a video call
-starts, it scans the face on screen **on the device** and checks it against the faces of their family. If the caller
-looks like a family member, the app doesn't trust the video. It asks **the real family member, on their own phone**,
-*"Are you calling Mum right now?"*
+**AntiScam Guard spots deepfake "family" video calls and asks the real person to confirm on their own phone, before anyone sends money.**
 
-- **Yes:** the call is shown as verified.
-- **No:** Mum sees a full-screen **SCAM. Hang up.** warning and her guardians are alerted.
-- **No reply:** Mum is told to ask a family secret question: *no answer, no money*.
+Scammers now video-call people on WhatsApp, Instagram and Messenger wearing a deepfaked face of a son, daughter or
+parent: *"Mum, I'm in trouble, I need money now."* A familiar face is no longer proof of who is calling.
 
-We don't ask *"is this video fake?"* (a race deepfakes keep winning). We ask *"does the real person confirm they're calling?"*
+AntiScam Guard doesn't try to decide whether the video is fake. That's an arms race deepfake tools keep winning.
+Instead, when the caller looks like a family member, it asks **that real person, on their own phone**:
 
-### How it works
+> **"Are you calling Mum right now?"**
 
-| Step | Android mechanism |
+Their answer is confirmed with a fingerprint and **cryptographically signed** by their phone, so a scammer can't fake it.
+
+| The real person answers | Mum sees, on top of the video call |
 | --- | --- |
-| Detect a video call in WhatsApp / Instagram | Accessibility Service watches the foreground app and call screen; Android 12+ also reports an active call |
-| See the caller's face | Accessibility screenshots (Android 11+), a few frames per second, processed in memory and never saved |
-| Who the caller claims to be | Caller name read from the call screen (e.g. "Son") |
-| Face match | On-device face detection and recognition (ML Kit / MediaPipe + a FaceNet-style model); only 128-number embeddings are stored |
-| Ask the real person / alert guardians | Firebase push, ECDSA P-256 signed alerts with single-use nonces, so forged or replayed alerts are rejected |
-| Family setup | Admin (guardian) creates a family and shares an invite link; members join, mark senior citizens and choose guardians |
+| **Yes** | Green: *"This is really Son."* |
+| **No** | Red: *"SCAM. Hang up."* Her chosen guardians are alerted straight away. |
+| No answer, or their phone is offline | Orange: ask the family secret question. *No answer, no money.* |
 
-**Platform support:** Android (8 or newer for the app, 11 or newer for automatic screen scanning). iOS doesn't let
-apps see other apps' screens, so iPhone users get guardian alerts and a manual "verify this caller" flow only.
-
-**Status:** the Android app is in development in [`android/`](android/). Download the latest build: **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)**. The web demo below is the interactive concept
-demo: it runs the same verification logic in a browser, with three simulated phones.
-
-### What's in this repo
-
-| Folder | What it is | Use it for |
-| --- | --- | --- |
-| [`android/`](android/) | **Native Android app**: detects real WhatsApp/Instagram video calls in the background and checks the face | Proving the detection is real |
-| [`mobile/`](mobile/) | **3-phone family demo**: the same app on Mum's, Son's and Daughter's phones, linked by a laptop relay, with a projector monitor and scammer console | The live "Are you calling Mum?" demo on real phones |
-| root (`index.html`, `app.js`…) | **Web simulation**: all three phones on one page, [live on GitHub Pages](https://zihimm.github.io/AI-Powered_AntiScam_App/) | Explaining the flow, and backup if phones or Wi-Fi fail |
-| [`docs/ONE-APK-SETUP.md`](docs/ONE-APK-SETUP.md) | **Setting up 3 phones with one app** (Mum / Son / Daughter) | Before every test and on stage |
-| [`docs/`](docs/) | **[Project status](docs/STATUS.md)** (what's built, tested, open, who owns it), real-phone test reports, team notes | Catching up, and the setup checklist before going on stage |
+Faces never leave the phone. Only small signed messages travel between the family's phones.
 
 ---
 
-## Web concept demo
+## How it works
 
-Browser demo with three phones on one page: **Mum** (receiver), **Son** (member/guardian) and **Daughter** (guardian).
-The face detection and matching are real and run in the browser with face-api.js. The push network between phones is
-simulated, but the nonces and ECDSA P-256 signatures are real (WebCrypto), so forged and replayed alerts genuinely fail.
-
-### Live demo
-
-**https://zihimm.github.io/AI-Powered_AntiScam_App/** (open in Chrome or Safari and allow camera access)
-
-#### Install it on your phone (PWA)
-- **iPhone (Safari):** open the link, tap **Share** and then **Add to Home Screen**.
-- **Android (Chrome):** open the link, tap **⋮** and then **Install app** (or **Add to Home screen**).
-
-On a phone the page shows one screen at a time with tabs: **Mum · Son · Daughter · Controls · Log**.
-A red dot on a tab means that phone just received something. Add `#son`, `#daughter` or `#controls` to the URL to open
-straight onto that view (e.g. give each judge a different link).
-
-It opens full-screen like a native app. After the first visit the app and face models (~13 MB) are cached,
-so it keeps working offline.
-
-### Run it locally
-
-```bash
-./start.sh            # serves http://localhost:8000 and opens it
-./start.sh 9000       # different port
+```
+ WhatsApp / Instagram / Messenger video call
+             │
+             ▼
+ ┌──────────────────────────┐                        ┌──────────────────────────┐
+ │ Mum's phone              │   signed WebSocket     │ Son's phone              │
+ │ AntiScam Guard           │◀────── messages ──────▶│ AntiScam Guard           │
+ │ 1. sees the call         │      via the relay     │ 3. "Are you calling      │
+ │ 2. face ≈ Son (on device)│                        │     Mum right now?"      │
+ │ 4. shows green / red     │                        │    fingerprint → Yes/No  │
+ └──────────────────────────┘                        └──────────────────────────┘
+                     ▲                                          │
+                     └──────────── signed answer ───────────────┘
+                     (and signed urgent alerts to Mum's guardians)
 ```
 
-It must be served from `localhost`, not opened as `file://`, because the camera, WebCrypto and model loading all need it.
-Use Chrome. Everything (library + model weights, ~13 MB in `vendor/`) is local, so **no internet is needed at the venue**.
+1. **Detect the call.** An Android Accessibility service notices a video call in WhatsApp, Instagram, Messenger or
+   Telegram and takes a few screenshots of it, processed in memory and never saved.
+2. **Recognise the face on the device.** ML Kit finds the faces in each frame and a MobileFaceNet (TensorFlow Lite) model turns
+   each one into a 192-number embedding. It's compared with the family's enrolled faces. A clear match must hold in
+   2 of 3 frames before anyone is asked.
+3. **Ask the real person.** A signed, single-use question goes to the matched person's phone through a small relay
+   server. They answer Yes or No behind a fingerprint or PIN prompt.
+4. **Trust only a signed answer.** Mum's phone checks the reply against the key it pinned for that person's phone, then
+   shows the result as an overlay on top of the call. If the person receiving the call is a senior, their guardians get
+   a signed urgent alert. Guardians can tap **Call Mum now** or send a signed **Tell Mum to hang up**.
 
-### Pitch flow (about 4 minutes)
+The full technical design is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
-1. **Problem (30s):** scammers deepfake a family member's face on a WhatsApp video call and ask for money.
-2. **Real app (1 min):** a teammate WhatsApp video-calls "Mum's" Android phone running the [Android app](android/).
-   The alert pops up. Mirror the phone to the projector with [scrcpy](https://github.com/Genymobile/scrcpy).
-3. **This web simulation (1.5 min):** *"When it looks like Son, here's what happens next"*, using the script below.
-   The **Behind the scenes** box under Mum's phone shows each step the background app takes.
-4. **Roadmap (30s):** Firebase family linking, real push between phones, Play Store review.
+## Security and privacy at a glance
 
-Mum's phone shows the call inside a messaging app (pick WhatsApp / Instagram / Messenger / Telegram in panel 3);
-everything from **🛡 AntiScam Guard** appears as notifications on top of the call, as in the real app.
+- **Faces stay on the phone.** Only embeddings (numbers, not photos) are stored, in the app's private storage.
+- **Hardware-backed keys.** Each phone has an ECDSA P-256 key in the Android Keystore. Questions, answers and alerts
+  are all signed.
+- **No impersonation.** Each family member's key is pinned on first contact. Family invites carry the inviter's key
+  fingerprint, so even the first pairing is checked.
+- **No replays.** Every message has a single-use nonce and expires quickly.
+- **The relay is untrusted.** It only forwards messages. Every decision is made and checked on the phones.
 
-### 2-minute demo script
+## Tech stack
 
-| Step | Do this | What judges see |
-| --- | --- | --- |
-| Setup | Panel 1: **🎥 Webcam** on the Son row (the presenter's face becomes "Son"). Panel 2: Son + Daughter ticked as guardians. Elder Mode **on**. | "✓ 3 face samples (embeddings only)". The log shows the 128-number embedding; the image is discarded. |
-| 1. Call | **📞 Incoming call** (or press `c`). Look at the camera. | Face matches Son → Son's phone: *"Are you calling Mum right now?"* Daughter gets a heads-up. |
-| 2. Spoof (State B) | On Son's phone tap **No, not me**. | Fingerprint check → Mum's screen goes full red **SCAM. Hang up.** Daughter's phone flashes an 🚨 urgent alert, signed by Mum's device. |
-| 2b. Guardian | On Daughter's phone tap **📞 Call Mum now** / **⚠️ Tell Mum to hang up**. | Mum gets "Daughter is calling you" / a verified hang-up message. |
-| 3. No reply (State C) | **Reset** (`r`), call again, ignore Son's phone (or **⏩ Skip to "no reply"**). | 🟠 "Couldn't check with Son. Ask this. No answer, no money." Guardians get an urgent alert. |
-| 4. Blur (State E) | Cover the camera or hold your hand in front of it. | 🟠 "Can't see the caller clearly." |
-| 5. Attacks | **😈 Forged alert**, then **🔁 Replay old alert**. | Daughter's phone: "🛑 Fake alert blocked" / "🛑 Replayed alert blocked". |
-| Standard Mode | Flip the Elder Mode switch off and repeat. | Smaller banners, user decides, and guardians are **not** alerted. |
-
-Other things to show: **"Son" (copied profile / spoofed)** in panel 3 shows that verification ignores the name and number on screen;
-untick **Son's phone online** for an offline phone; a teammate's face (or **Stranger**) gives State D, a normal call with no shield.
-
-#### If something goes wrong on stage
-- **Webcam or lighting fails:** use the **Caller's face** buttons (Son / Daughter / Stranger / Blurry / Covered).
-  They feed the same state machine, and the log marks them `[forced]`.
-- **Face doesn't match:** enrol 2–3 more webcam samples under the venue lighting, or raise *Match threshold* under
-  *Tuning & debug* (default 0.50; the same person usually scores 0.2–0.4 and different people 0.6+).
-- **Blurry warning fires on a sharp face:** lower *Sharpness threshold*. The live `sharp=` value is shown on Mum's screen.
-- Hide the side panel with **Hide controls** for a clean three-phone view. Shortcuts: `c` call, `e` end, `r` reset.
-
-### How it maps to the brief
-
-| Brief | Where |
+| Area | Technology |
 | --- | --- |
-| Decision matrix A–E | `handleObs`, `startVerification`, `onReply` in `app.js` |
-| Elder escalation table | `onReply`, `alertGuardians`, `renderMum` |
-| Signed emergency alerts (key pair, timestamp, single-use nonce) | `sign`/`verify`, `MemberPhone.receiveAlert` |
-| Faces stay on device | `addDescriptor` stores only embeddings in `localStorage`; "Forget everything" wipes them |
-| Minimal push payload | Every push is printed in the log: nonce + prompt only |
-| Biometric lock on Yes/No | Simulated fingerprint step in `MemberPhone.answer` |
-| Blur check (Laplacian variance) | `sharpness()` |
+| Android app | Kotlin, Android 8+ (automatic call checks need Android 11+), AccessibilityService, CameraX, BiometricPrompt, foreground services |
+| On-device ML | Google ML Kit face detection, MobileFaceNet (TensorFlow Lite, 192-d embeddings), ML Kit barcode scanning |
+| Crypto | ECDSA P-256 (Android Keystore / WebCrypto), key pinning, nonces |
+| Relay | Node.js WebSocket server, Docker, Cloudflare Tunnel |
+| Companion app | Web / Capacitor app with face-api.js (Family Verify) |
+| CI/CD | GitHub Actions builds and publishes the APK to GitHub Releases |
 
-Simulated for the demo (show the real versions in the "production architecture" slide): push delivery (FCM),
-key exchange during family setup, biometric prompt, and capturing video from third-party call apps.
+## Try it
 
-### Files
+| What | How |
+| --- | --- |
+| **Android app** | Download **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)** and install it on each phone (no Play Store needed). Setup: [docs/ONE-APK-SETUP.md](docs/ONE-APK-SETUP.md) |
+| **Family preview** (everyone protected, QR-code join) | **[Step 2 preview APK](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-step2-preview/AntiScamGuard.apk)**, from branch `jason/step2` |
+| **Browser demo** (no phones needed) | **[Live web demo](https://zihimm.github.io/AI-Powered_AntiScam_App/)**: three simulated phones on one page. Details: [docs/WEB-DEMO.md](docs/WEB-DEMO.md) |
+| **Relay** (for real phones) | `cd mobile && npm install && npm run relay`, then enter the printed address in the app. See [mobile/README.md](mobile/README.md) |
 
-```
-index.html     layout: setup panel, 3 phones, log
-styles.css     phone mock-ups, Standard/Elder styles
-app.js         face pipeline, call state machine, signed alerts, phones
-start.sh       local server
-sw.js          service worker (offline cache, installable PWA)
-manifest.webmanifest  PWA name, icons, colours
-icons/         app icons
-vendor/        face-api.js 1.7.15 (@vladmandic, MIT) + model weights
-```
+## Repository map
+
+| Path | What it is |
+| --- | --- |
+| [`android/`](android/) | **AntiScam Guard**, the native Android app: call detection, face recognition, family checks, warnings over the call |
+| [`mobile/`](mobile/) | **Family Verify** companion app, the **relay** server (`mobile/relay/`), and the demo **monitor + scammer console** |
+| root (`index.html`, `app.js`, …) | Browser concept demo (installable PWA), hosted on GitHub Pages |
+| [`join.html`](join.html) | Landing page for family invite links (family details stay in the `#` fragment, never sent to a server) |
+| [`docs/`](docs/) | [Architecture](docs/ARCHITECTURE.md), [project status](docs/STATUS.md), setup guides, real-phone test reports, team design notes |
+| [`.github/workflows/`](.github/workflows/) | CI that builds the Android APK |
+
+## Project status
+
+Built during a hackathon, November 2026.
+
+- **`main`**: fixed family roles (Mum is protected; Son and Daughter confirm and act as guardians). Tested with real
+  WhatsApp and Messenger calls.
+- **`jason/step2`** (preview): every family member is protected, families with any names (up to 8 phones), QR-code and
+  invite-link join, a setup wizard, and faces shared automatically between family phones. Tested on real phones
+  through a cloud relay.
+- **Limitations:** Android only (iOS doesn't let apps see other apps' screens); apps that block screenshots can't be
+  checked, and the app says so; the demo relay runs behind a temporary tunnel.
+
+## Team
+
+| | Role |
+| --- | --- |
+| **Jason** ([@ZiHimm](https://github.com/ZiHimm)) | AntiScam Guard Android app, family protocol, web demo, CI |
+| **Brian** | Family Verify companion app, relay, monitor, real-phone testing and reports |
+| **Ben** | Relay infrastructure: Docker, Cloudflare Tunnel, cloud deployment |
