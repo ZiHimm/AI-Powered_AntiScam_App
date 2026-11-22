@@ -1,0 +1,27 @@
+# One-command family relay with a free public https address (Cloudflare quick tunnel).
+#
+# From the REPO ROOT, with Docker running:
+#   MONITOR_TOKEN=$(openssl rand -hex 16) docker compose -f mobile/relay/docker-compose.yml up -d --build
+#   docker compose -f mobile/relay/docker-compose.yml logs tunnel | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'
+#
+# Type that https address into the app when you create a family. Stop with:
+#   docker compose -f mobile/relay/docker-compose.yml down
+#
+# The address changes every time the tunnel restarts; the computer must stay on, awake and online.
+services:
+  relay:
+    build:
+      context: ../..
+      dockerfile: mobile/relay/Dockerfile
+    environment:
+      PUBLIC: "1"                                     # internet lockdown: family rooms only
+      MONITOR_TOKEN: ${MONITOR_TOKEN:?Set MONITOR_TOKEN, e.g. MONITOR_TOKEN=$(openssl rand -hex 16)}
+    ports:
+      - "8000:8000"                                   # also reachable on your local network
+    restart: unless-stopped
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://relay:8000
+    depends_on:
+      - relay
+    restart: unless-stopped
