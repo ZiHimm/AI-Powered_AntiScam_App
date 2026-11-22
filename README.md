@@ -76,6 +76,9 @@ The full technical design is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 
 ## Try it
 
+**New here? Follow [docs/GET-STARTED.md](docs/GET-STARTED.md)**: install the app on your Android phones, start a relay
+with one command, set up a family with a QR code, and try the scam scenario, step by step.
+
 | What | How |
 | --- | --- |
 | **Android app** | Download **[AntiScamGuard.apk](https://github.com/ZiHimm/AI-Powered_AntiScam_App/releases/download/android-latest/AntiScamGuard.apk)** and install it on each phone (no Play Store needed). Setup: [docs/ONE-APK-SETUP.md](docs/ONE-APK-SETUP.md) |
@@ -91,7 +94,7 @@ The full technical design is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 | [`mobile/`](mobile/) | **Family Verify** companion app, the **relay** server (`mobile/relay/`), and the demo **monitor + scammer console** |
 | root (`index.html`, `app.js`, …) | Browser concept demo (installable PWA), hosted on GitHub Pages |
 | [`join.html`](join.html) | Landing page for family invite links (family details stay in the `#` fragment, never sent to a server) |
-| [`docs/`](docs/) | [Architecture](docs/ARCHITECTURE.md), [project status](docs/STATUS.md), setup guides, real-phone test reports, team design notes |
+| [`docs/`](docs/) | [Get started](docs/GET-STARTED.md), [architecture](docs/ARCHITECTURE.md), [project status](docs/STATUS.md), setup guides, real-phone test reports, team design notes |
 | [`.github/workflows/`](.github/workflows/) | CI that builds the Android APK |
 
 ## Project status
