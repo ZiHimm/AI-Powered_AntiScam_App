@@ -115,4 +115,4 @@ Built during a hackathon, November 2026.
 | --- | --- |
 | **Jason** ([@ZiHimm](https://github.com/ZiHimm)) | AntiScam Guard Android app, family protocol, web demo, CI |
 | **Brian** ([@BrianKang1126](https://github.com/briankang1126))| Family Verify companion app, relay, monitor, real-phone testing and reports |
-| **Ben**   ([@JustbenningAround2](https://github.com/benhong124-commits)| Relay infrastructure: Docker, Cloudflare Tunnel, cloud deployment |
+| **Ben**   ([@JustbenningAround2](https://github.com/benhong124-commits))| Relay infrastructure: Docker, Cloudflare Tunnel, cloud deployment |
